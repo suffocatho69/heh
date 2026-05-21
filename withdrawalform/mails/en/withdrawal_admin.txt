@@ -1,0 +1,7 @@
+New withdrawal request received.
+
+Order: {order_reference}
+Customer: {firstname} {lastname}
+Reason: {reason}
+Message: {message}
+Date: {date}

@@ -1,0 +1,7 @@
+Nowe zgłoszenie odstąpienia od umowy.
+
+Zamówienie: {order_reference}
+Klient: {firstname} {lastname}
+Powód: {reason}
+Wiadomość: {message}
+Data: {date}

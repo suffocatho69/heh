@@ -1,0 +1,10 @@
+{firstname} {lastname},
+
+Twoje zgłoszenie odstąpienia od umowy dla zamówienia {order_reference} zostało przyjęte.
+
+Szczegóły zgłoszenia:
+Powód: {reason}
+Wiadomość: {message}
+Data: {date}
+
+Dziękujemy.

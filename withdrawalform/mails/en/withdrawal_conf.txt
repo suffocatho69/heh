@@ -1,0 +1,10 @@
+{firstname} {lastname},
+
+Your withdrawal request for order {order_reference} has been received.
+
+Request details:
+Reason: {reason}
+Message: {message}
+Date: {date}
+
+Thank you.
