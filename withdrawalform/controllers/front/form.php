@@ -119,6 +119,22 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
                 $withdrawal->selected_products = json_encode($selected_products);
                 $withdrawal->ip_address = Tools::getRemoteAddr();
                 $withdrawal->date_add = date('Y-m-d H:i:s');
+
+                // Create PrestaShop native OrderReturn
+                if (Configuration::get('PS_RETUR_ABLE')) {
+                    $order_return = new OrderReturn();
+                    $order_return->id_order = (int) $order->id;
+                    $order_return->id_customer = (int) $order->id_customer;
+                    $order_return->question = $reason . "\n" . $message;
+                    $order_return->state = 1; // Waiting for confirmation
+                    if ($order_return->add()) {
+                        $withdrawal->id_order_return = (int) $order_return->id;
+                        foreach ($selected_products as $id_order_detail => $qty) {
+                            $order_return->setReturnDetail($id_order_detail, $qty);
+                        }
+                    }
+                }
+
                 $res = $withdrawal->add();
 
                 if ($res) {

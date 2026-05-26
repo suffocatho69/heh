@@ -79,6 +79,11 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'title' => $this->l('IP address'),
                 'width' => 100
             ),
+            'id_order_return' => array(
+                'title' => $this->l('Native Return ID'),
+                'width' => 50,
+                'callback' => 'displayNativeReturnLink'
+            ),
         );
 
         $this->actions = array('view', 'delete');
@@ -100,6 +105,16 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             'href' => self::$currentIndex . '&export' . $this->table . '&token=' . $this->token,
             'desc' => $this->l('Export to CSV')
         );
+    }
+
+    public function displayNativeReturnLink($id_order_return)
+    {
+        if (!$id_order_return) {
+            return '---';
+        }
+
+        $link = $this->context->link->getAdminLink('AdminReturn') . '&id_order_return=' . (int) $id_order_return . '&vieworder_return';
+        return '<a href="' . $link . '" class="btn btn-default" target="_blank"><i class="icon-external-link"></i> #' . (int) $id_order_return . '</a>';
     }
 
     public function renderView()

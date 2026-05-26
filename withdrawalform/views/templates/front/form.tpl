@@ -52,6 +52,10 @@
 
         <h3 style="color:#d4af37;margin-top:18px;">6.5 zwrot środków</h3>
         <p>sprzedawca zwróci wszystkie otrzymane od konsumenta płatności niezwłocznie, nie później niż w terminie <strong>14 dni</strong> od dnia otrzymania oświadczenia o odstąpieniu od umowy.</p>
+        <p style="color:#f79c4b; font-weight: bold; border-top: 1px solid #5e4b3c; padding-top: 10px;">
+          <i class="material-icons" style="vertical-align: middle;">info</i>
+          {l s='Gwarantujemy zwrot środków w ciągu 14 dni od otrzymania oświadczenia o odstąpieniu.' mod='withdrawalform'}
+        </p>
       </div>
 
       <div class="withdrawal-action-form" style="border: 2px solid #f79c4b; padding: 20px; border-radius: 8px;">

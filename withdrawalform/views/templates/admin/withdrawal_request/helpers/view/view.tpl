@@ -39,6 +39,18 @@
                 <p class="form-control-static">{$withdrawal.ip_address}</p>
             </div>
         </div>
+        {if $withdrawal.id_order_return}
+            <div class="row">
+                <label class="control-label col-lg-3">{l s='PrestaShop Return' mod='withdrawalform'}:</label>
+                <div class="col-lg-9">
+                    <p class="form-control-static">
+                        <a href="{$link->getAdminLink('AdminReturn')|escape:'html':'UTF-8'}&id_order_return={$withdrawal.id_order_return|intval}&vieworder_return" class="btn btn-default" target="_blank">
+                            <i class="icon-external-link"></i> #{l s='View Return' mod='withdrawalform'} ({$withdrawal.id_order_return|intval})
+                        </a>
+                    </p>
+                </div>
+            </div>
+        {/if}
     </div>
 
     <hr>
