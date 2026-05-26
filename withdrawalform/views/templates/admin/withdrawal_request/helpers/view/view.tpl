@@ -40,4 +40,25 @@
             </div>
         </div>
     </div>
+
+    <hr>
+    <h3>{l s='Returned Products' mod='withdrawalform'}</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>{l s='Reference' mod='withdrawalform'}</th>
+                <th>{l s='Product' mod='withdrawalform'}</th>
+                <th>{l s='Quantity' mod='withdrawalform'}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {foreach from=$products item=product}
+                <tr>
+                    <td>{$product.reference}</td>
+                    <td>{$product.name}</td>
+                    <td>{$product.quantity}</td>
+                </tr>
+            {/foreach}
+        </tbody>
+    </table>
 </div>

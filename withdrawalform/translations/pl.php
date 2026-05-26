@@ -22,6 +22,8 @@ $_MODULE['<{withdrawalform}prestashop>form_f4f70727dc34561dfde1a3c529b6205c'] = 
 $_MODULE['<{withdrawalform}prestashop>form_6ef82928e370e53ca0e0600078028751'] = 'Wybierz co najmniej jeden produkt.';
 $_MODULE['<{withdrawalform}prestashop>form_5f309a473a2167d4e38c92a6c624647c'] = 'Potwierdzenie zgłoszenia odstąpienia od umowy';
 $_MODULE['<{withdrawalform}prestashop>form_29431a49f5080f588506144e05739665'] = 'Nowe zgłoszenie odstąpienia od umowy';
+$_MODULE['<{withdrawalform}prestashop>form_b8ef3635398246e7f805a5a172776c76'] = 'Zgłoszenie odstąpienia od umowy dla produktów:';
+$_MODULE['<{withdrawalform}prestashop>form_0ad0090333d0e2e2ec0a184136e651e0'] = 'Nieprawidłowa ilość dla produktu %s.';
 
 // Form template
 $_MODULE['<{withdrawalform}prestashop>form_782c30089e900a747970860ed7126135'] = 'Odstąp od umowy';
@@ -36,7 +38,21 @@ $_MODULE['<{withdrawalform}prestashop>form_6e771000676735c3479a834458b09322'] = 
 $_MODULE['<{withdrawalform}prestashop>form_387d8985c4e478546524300c30664402'] = 'Powód (opcjonalnie)';
 $_MODULE['<{withdrawalform}prestashop>form_608149e3547842c16264f33169335f6a'] = 'Wiadomość / Dodatkowe informacje';
 $_MODULE['<{withdrawalform}prestashop>form_974276711674391295627230491a273b'] = 'Zatwierdź odstąpienie';
+$_MODULE['<{withdrawalform}prestashop>form_3101c0b395679c17823e206016e6f9d7'] = 'Dostępna ilość:';
 
 // Hook checkout
 $_MODULE['<{withdrawalform}prestashop>withdrawalform_d3897405105267104976721021487541'] = 'Informacja o prawie do odstąpienia';
-$_MODULE['<{withdrawalform}prestashop>withdrawalform_761b0c968f9b977759a224976451e04b'] = 'Kupując w naszym sklepie, masz prawo do odstąpienia od umowy w terminie 14 dni. Możesz to zrobić wygodnie za pomocą cyfrowego formularza dostępnego w Twoim panelu klienta lub poprzez link w e-mailu potwierdzającym.';
+$_MODULE['<{withdrawalform}prestashop>withdrawalform_d481079367104976721021487541c8'] = 'Kupując w naszym sklepie, masz prawo do odstąpienia od umowy w terminie 14 dni. Możesz to zrobić wygodnie za pomocą cyfrowego formularza dostępnego w Twoim panelu klienta lub poprzez link w e-mailu potwierdzającym.';
+
+// Admin view
+$_MODULE['<{withdrawalform}prestashop>view_914419aa36f0580daec3875323985390'] = 'Szczegóły zgłoszenia odstąpienia';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c41'] = 'Referencja zamówienia';
+$_MODULE['<{withdrawalform}prestashop>view_45c479417855018696c694a918e3c50d'] = 'Klient';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c42'] = 'Data';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c43'] = 'Powód';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c44'] = 'Wiadomość';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c45'] = 'Adres IP';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c46'] = 'Zwracane produkty';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c47'] = 'Referencja';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c48'] = 'Produkt';
+$_MODULE['<{withdrawalform}prestashop>view_44749712dbec183e983dcd78a7736c49'] = 'Ilość';

@@ -60,6 +60,7 @@ class WithdrawalForm extends Module
             $this->registerHook('header') &&
             $this->registerHook('displayOrderDetail') &&
             $this->registerHook('actionGetExtraMailTemplateVars') &&
+            $this->registerHook('actionOrderStatusPostUpdate') &&
             $this->registerHook('moduleRoutes') &&
             $this->registerHook('displayCheckoutSubtotalDetails') &&
             $this->installTab() &&
@@ -298,5 +299,50 @@ class WithdrawalForm extends Module
     public function hookDisplayCheckoutSubtotalDetails($params)
     {
         return $this->display(__FILE__, 'views/templates/hook/checkout_info.tpl');
+    }
+
+    public function hookActionOrderStatusPostUpdate($params)
+    {
+        $new_order_status = $params['newOrderStatus'];
+        $id_order = (int) $params['id_order'];
+        $order = new Order($id_order);
+
+        // Standard PrestaShop status for "Delivered" is often 5
+        // But it's better to check if it has the 'delivery' flag or by name
+        if ($new_order_status->delivery || $new_order_status->id == (int) Configuration::get('PS_OS_DELIVERED')) {
+            $customer = new Customer((int) $order->id_customer);
+
+            $withdrawal_url = $this->context->link->getModuleLink(
+                $this->name,
+                'form',
+                array(
+                    'id_order' => $order->id,
+                    'secure_key' => $order->secure_key
+                ),
+                true,
+                (int) $order->id_lang
+            );
+
+            $template_vars = array(
+                '{firstname}' => $customer->firstname,
+                '{lastname}' => $customer->lastname,
+                '{order_reference}' => $order->reference,
+                '{withdrawal_url}' => $withdrawal_url,
+            );
+
+            Mail::Send(
+                (int) $order->id_lang,
+                'withdrawal_link',
+                $this->l('Informacja o prawie do zwrotu towaru'),
+                $template_vars,
+                $customer->email,
+                $customer->firstname . ' ' . $customer->lastname,
+                null,
+                null,
+                null,
+                null,
+                $this->local_path . 'mails/'
+            );
+        }
     }
 }

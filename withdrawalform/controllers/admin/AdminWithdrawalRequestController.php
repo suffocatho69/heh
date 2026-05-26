@@ -107,8 +107,25 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             WHERE a.id_withdrawal_request = ' . $id
         );
 
+        $products_data = [];
+        if ($res && $res['selected_products']) {
+            $selected_products = json_decode($res['selected_products'], true);
+            $order = new Order((int) $res['id_order']);
+            $order_products = $order->getProducts();
+            foreach ($order_products as $op) {
+                if (isset($selected_products[$op['id_order_detail']])) {
+                    $products_data[] = [
+                        'name' => $op['product_name'],
+                        'reference' => $op['product_reference'],
+                        'quantity' => $selected_products[$op['id_order_detail']]
+                    ];
+                }
+            }
+        }
+
         $this->context->smarty->assign(array(
             'withdrawal' => $res,
+            'products' => $products_data
         ));
 
         return parent::renderView();
