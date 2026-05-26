@@ -194,15 +194,14 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
     protected function sendEmails($order, $reason, $message, $selected_products = [])
     {
         $customer = new Customer((int) $order->id_customer);
-        $products_html = '<ul>';
+        $products_list = '';
         $order_products = $order->getProducts();
         foreach ($order_products as $op) {
             if (isset($selected_products[$op['id_order_detail']])) {
                 $qty = (int) $selected_products[$op['id_order_detail']];
-                $products_html .= '<li>' . $op['product_name'] . ' x ' . $qty . '</li>';
+                $products_list .= '- ' . $op['product_name'] . ' x ' . $qty . "\n";
             }
         }
-        $products_html .= '</ul>';
 
         $template_vars = array(
             '{order_reference}' => $order->reference,
@@ -210,7 +209,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
             '{lastname}' => $customer->lastname,
             '{reason}' => $reason,
             '{message}' => $message,
-            '{products}' => $products_html,
+            '{products}' => nl2br($products_list),
             '{date}' => date('Y-m-d H:i:s'),
         );
 
