@@ -121,7 +121,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
                 $withdrawal->date_add = date('Y-m-d H:i:s');
 
                 // Create PrestaShop native OrderReturn
-                if (Configuration::get('PS_RETUR_ABLE')) {
+                if (Configuration::get('PS_ORDER_RETURN')) {
                     $order_return = new OrderReturn();
                     $order_return->id_order = (int) $order->id;
                     $order_return->id_customer = (int) $order->id_customer;

@@ -84,6 +84,17 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'width' => 50,
                 'callback' => 'displayNativeReturnLink'
             ),
+            'status' => array(
+                'title' => $this->l('Status'),
+                'width' => 100,
+                'type' => 'select',
+                'list' => array(
+                    'pending' => $this->l('Pending'),
+                    'completed' => $this->l('Completed'),
+                    'rejected' => $this->l('Rejected'),
+                ),
+                'filter_key' => 'a!status',
+            ),
         );
 
         $this->actions = array('view', 'delete');
@@ -115,6 +126,76 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $link = $this->context->link->getAdminLink('AdminReturn') . '&id_order_return=' . (int) $id_order_return . '&vieworder_return';
         return '<a href="' . $link . '" class="btn btn-default" target="_blank"><i class="icon-external-link"></i> #' . (int) $id_order_return . '</a>';
+    }
+
+    public function renderList()
+    {
+        $listHtml = parent::renderList();
+
+        // === NATYWNE ZWROTY PS ===
+        $returns = Db::getInstance()->executeS('
+            SELECT r.id_order_return, r.id_order, r.question, r.date_add,
+                   o.reference AS order_reference,
+                   c.firstname, c.lastname, c.email AS customer_email,
+                   rs.name AS state_name, rs.color AS state_color,
+                   wr.id_withdrawal_request
+            FROM `' . _DB_PREFIX_ . 'order_return` r
+            LEFT JOIN `' . _DB_PREFIX_ . 'orders` o
+                ON o.id_order = r.id_order
+            LEFT JOIN `' . _DB_PREFIX_ . 'customer` c
+                ON c.id_customer = r.id_customer
+            LEFT JOIN `' . _DB_PREFIX_ . 'order_return_state_lang` rs
+                ON rs.id_order_return_state = r.state
+                AND rs.id_lang = ' . (int)$this->context->language->id . '
+            LEFT JOIN `' . _DB_PREFIX_ . 'withdrawal_request` wr
+                ON wr.id_order_return = r.id_order_return
+            ORDER BY r.date_add DESC
+            LIMIT 50
+        ') ?: [];
+
+        $nativeReturnsHtml = '<div class="panel col-lg-12">
+            <div class="panel-heading">
+                <i class="icon-exchange"></i> ' . $this->l('Native PrestaShop Returns (Recent 50)') . '
+            </div>
+            <div class="table-responsive-row clearfix">
+                <table class="table order_return">
+                    <thead>
+                        <tr class="nodrag nodrop">
+                            <th><span class="title_box">' . $this->l('ID') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Date') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Order') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Customer') . '</span></th>
+                            <th><span class="title_box">' . $this->l('PS Status') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Associated Request') . '</span></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>';
+
+        if (empty($returns)) {
+            $nativeReturnsHtml .= '<tr><td class="list-empty" colspan="7"><div class="list-empty-msg"><i class="icon-warning-sign list-empty-icon"></i>' . $this->l('No native returns found.') . '</div></td></tr>';
+        } else {
+            foreach ($returns as $r) {
+                $link = $this->context->link->getAdminLink('AdminReturn') . '&id_order_return=' . (int) $r['id_order_return'] . '&vieworder_return';
+                $assoc = $r['id_withdrawal_request'] ? '<span class="label label-success">#' . (int)$r['id_withdrawal_request'] . '</span>' : '<span class="label label-warning">' . $this->l('None') . '</span>';
+
+                $nativeReturnsHtml .= '<tr>
+                    <td>' . (int)$r['id_order_return'] . '</td>
+                    <td>' . $r['date_add'] . '</td>
+                    <td>' . $r['order_reference'] . '</td>
+                    <td>' . $r['firstname'] . ' ' . $r['lastname'] . ' (' . $r['customer_email'] . ')</td>
+                    <td><span class="label" style="background-color:' . $r['state_color'] . ';color:white;">' . $r['state_name'] . '</span></td>
+                    <td>' . $assoc . '</td>
+                    <td class="text-right">
+                        <a href="' . $link . '" class="btn btn-default"><i class="icon-search-plus"></i> ' . $this->l('View') . '</a>
+                    </td>
+                </tr>';
+            }
+        }
+
+        $nativeReturnsHtml .= '</tbody></table></div></div>';
+
+        return $listHtml . $nativeReturnsHtml;
     }
 
     public function renderView()

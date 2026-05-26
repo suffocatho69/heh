@@ -32,6 +32,7 @@ class WithdrawalRequest extends ObjectModel
     public $message;
     public $selected_products;
     public $ip_address;
+    public $status = 'pending';
     public $id_order_return;
     public $date_add;
 
@@ -46,6 +47,7 @@ class WithdrawalRequest extends ObjectModel
             'selected_products' => array('type' => self::TYPE_STRING, 'validate' => 'isString'),
             'ip_address' => array('type' => self::TYPE_STRING, 'validate' => 'isAnything', 'size' => 45),
             'id_order_return' => array('type' => self::TYPE_INT, 'validate' => 'isUnsignedId'),
+            'status' => array('type' => self::TYPE_STRING, 'validate' => 'isString', 'size' => 20),
             'date_add' => array('type' => self::TYPE_DATE, 'validate' => 'isDate'),
         ),
     );
