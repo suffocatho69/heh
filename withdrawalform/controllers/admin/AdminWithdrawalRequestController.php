@@ -24,6 +24,8 @@
  *  International Registered Trademark & Property of PrestaShop SA
  */
 
+require_once _PS_MODULE_DIR_ . 'withdrawalform/classes/WithdrawalRequest.php';
+
 class AdminWithdrawalRequestController extends ModuleAdminController
 {
     public function __construct()
@@ -49,28 +51,28 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'width' => 25
             ),
             'id_order' => array(
-                'title' => $this->l('Order ID'),
+                'title' => $this->l('ID zamówienia'),
                 'width' => 25
             ),
             'order_reference' => array(
-                'title' => $this->l('Order Reference'),
+                'title' => $this->l('Referencja zamówienia'),
                 'width' => 100
             ),
             'customer_email' => array(
-                'title' => $this->l('Customer Email'),
+                'title' => $this->l('Email klienta'),
                 'width' => 150
             ),
             'reason' => array(
-                'title' => $this->l('Reason'),
+                'title' => $this->l('Powód'),
                 'width' => 200
             ),
             'date_add' => array(
-                'title' => $this->l('Date'),
+                'title' => $this->l('Data zgłoszenia'),
                 'type' => 'datetime',
                 'width' => 150
             ),
             'ip_address' => array(
-                'title' => $this->l('IP Address'),
+                'title' => $this->l('Adres IP'),
                 'width' => 100
             ),
         );
@@ -78,8 +80,8 @@ class AdminWithdrawalRequestController extends ModuleAdminController
         $this->actions = array('view', 'delete');
         $this->bulk_actions = array(
             'delete' => array(
-                'text' => $this->l('Delete selected'),
-                'confirm' => $this->l('Delete selected items?'),
+                'text' => $this->l('Usuń zaznaczone'),
+                'confirm' => $this->l('Usunąć zaznaczone elementy?'),
                 'icon' => 'icon-trash'
             )
         );
@@ -92,7 +94,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $this->toolbar_btn['export'] = array(
             'href' => self::$currentIndex . '&export' . $this->table . '&token=' . $this->token,
-            'desc' => $this->l('Export CSV')
+            'desc' => $this->l('Eksportuj do CSV')
         );
     }
 
@@ -111,14 +113,16 @@ class AdminWithdrawalRequestController extends ModuleAdminController
         if ($res && $res['selected_products']) {
             $selected_products = json_decode($res['selected_products'], true);
             $order = new Order((int) $res['id_order']);
-            $order_products = $order->getProducts();
-            foreach ($order_products as $op) {
-                if (isset($selected_products[$op['id_order_detail']])) {
-                    $products_data[] = [
-                        'name' => $op['product_name'],
-                        'reference' => $op['product_reference'],
-                        'quantity' => $selected_products[$op['id_order_detail']]
-                    ];
+            if (Validate::isLoadedObject($order)) {
+                $order_products = $order->getProducts();
+                foreach ($order_products as $op) {
+                    if (isset($selected_products[$op['id_order_detail']])) {
+                        $products_data[] = [
+                            'name' => $op['product_name'],
+                            'reference' => $op['product_reference'],
+                            'quantity' => $selected_products[$op['id_order_detail']]
+                        ];
+                    }
                 }
             }
         }

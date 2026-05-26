@@ -46,8 +46,8 @@ class WithdrawalForm extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Withdraw from contract here');
-        $this->description = $this->l('Allows customers to easily withdraw from a contract directly from their order history, according to new regulations.');
+        $this->displayName = $this->l('Odstąp od umowy tutaj');
+        $this->description = $this->l('Umożliwia klientom łatwe odstąpienie od umowy bezpośrednio z historii zamówień, zgodnie z nowymi przepisami.');
 
         $this->ps_versions_compliancy = array('min' => '1.7.5', 'max' => '9.9.9');
     }
@@ -90,7 +90,7 @@ class WithdrawalForm extends Module
 
         $languages = Language::getLanguages();
         foreach ($languages as $lang) {
-            $tab->name[$lang['id_lang']] = $this->l('Withdrawal Requests');
+            $tab->name[$lang['id_lang']] = $this->l('Zgłoszenia odstąpienia');
         }
 
         return $tab->add();
@@ -119,7 +119,7 @@ class WithdrawalForm extends Module
             Configuration::updateValue($this->config_prefix . 'MODE', $mode);
             Configuration::updateValue($this->config_prefix . 'ONE_PER_ORDER', $one_per_order);
 
-            $output .= $this->displayConfirmation($this->l('Settings updated.'));
+            $output .= $this->displayConfirmation($this->l('Ustawienia zostały zaktualizowane.'));
         }
 
         return $output . $this->renderForm();
@@ -130,27 +130,27 @@ class WithdrawalForm extends Module
         $fields_form = array(
             'form' => array(
                 'legend' => array(
-                    'title' => $this->l('Settings'),
+                    'title' => $this->l('Ustawienia'),
                     'icon' => 'icon-cogs',
                 ),
                 'input' => array(
                     array(
                         'type' => 'text',
-                        'label' => $this->l('Withdrawal limit (days)'),
+                        'label' => $this->l('Limit dni na odstąpienie'),
                         'name' => 'WITHDRAWAL_FORM_DAYS_LIMIT',
                         'size' => 20,
                         'required' => true,
-                        'desc' => $this->l('Number of days from the order date when the withdrawal is allowed (e.g., 14).'),
+                        'desc' => $this->l('Liczba dni od daty dostarczenia (lub zamówienia), w których możliwe jest odstąpienie.'),
                     ),
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Limit mode'),
+                        'label' => $this->l('Tryb limitu'),
                         'name' => 'WITHDRAWAL_FORM_MODE',
                         'options' => array(
                             'query' => array(
-                                array('id' => 'off', 'name' => $this->l('Disabled - no limit')),
-                                array('id' => 'soft', 'name' => $this->l('Soft - warning only')),
-                                array('id' => 'hard', 'name' => $this->l('Hard - block form after limit')),
+                                array('id' => 'off', 'name' => $this->l('Wyłączony - brak limitu')),
+                                array('id' => 'soft', 'name' => $this->l('Soft - tylko ostrzeżenie')),
+                                array('id' => 'hard', 'name' => $this->l('Hard - blokada formularza po terminie')),
                             ),
                             'id' => 'id',
                             'name' => 'name',
@@ -158,25 +158,25 @@ class WithdrawalForm extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Limit to one request per order'),
+                        'label' => $this->l('Ogranicz do jednego zgłoszenia na zamówienie'),
                         'name' => 'WITHDRAWAL_FORM_ONE_PER_ORDER',
                         'is_bool' => true,
                         'values' => array(
                             array(
                                 'id' => 'active_on',
                                 'value' => 1,
-                                'label' => $this->l('Enabled'),
+                                'label' => $this->l('Tak'),
                             ),
                             array(
                                 'id' => 'active_off',
                                 'value' => 0,
-                                'label' => $this->l('Disabled'),
+                                'label' => $this->l('Nie'),
                             ),
                         ),
                     ),
                 ),
                 'submit' => array(
-                    'title' => $this->l('Save'),
+                    'title' => $this->l('Zapisz'),
                 ),
             ),
         );
