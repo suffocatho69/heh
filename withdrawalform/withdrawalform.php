@@ -46,8 +46,8 @@ class WithdrawalForm extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Odstąp od umowy tutaj');
-        $this->description = $this->l('Umożliwia klientom łatwe odstąpienie od umowy bezpośrednio z historii zamówień, zgodnie z nowymi przepisami.');
+        $this->displayName = $this->l('Withdraw from the contract here');
+        $this->description = $this->l('Allows customers to easily withdraw from the contract directly from the order history, in accordance with new regulations.');
 
         $this->ps_versions_compliancy = array('min' => '1.7.5', 'max' => '9.9.9');
     }
@@ -90,7 +90,7 @@ class WithdrawalForm extends Module
 
         $languages = Language::getLanguages();
         foreach ($languages as $lang) {
-            $tab->name[$lang['id_lang']] = $this->l('Zgłoszenia odstąpienia');
+            $tab->name[$lang['id_lang']] = $this->l('Withdrawal requests');
         }
 
         return $tab->add();
@@ -119,7 +119,7 @@ class WithdrawalForm extends Module
             Configuration::updateValue($this->config_prefix . 'MODE', $mode);
             Configuration::updateValue($this->config_prefix . 'ONE_PER_ORDER', $one_per_order);
 
-            $output .= $this->displayConfirmation($this->l('Ustawienia zostały zaktualizowane.'));
+            $output .= $this->displayConfirmation($this->l('Settings updated.'));
         }
 
         return $output . $this->renderForm();
@@ -130,27 +130,27 @@ class WithdrawalForm extends Module
         $fields_form = array(
             'form' => array(
                 'legend' => array(
-                    'title' => $this->l('Ustawienia'),
+                    'title' => $this->l('Settings'),
                     'icon' => 'icon-cogs',
                 ),
                 'input' => array(
                     array(
                         'type' => 'text',
-                        'label' => $this->l('Limit dni na odstąpienie'),
+                        'label' => $this->l('Withdrawal days limit'),
                         'name' => 'WITHDRAWAL_FORM_DAYS_LIMIT',
                         'size' => 20,
                         'required' => true,
-                        'desc' => $this->l('Liczba dni od daty dostarczenia (lub zamówienia), w których możliwe jest odstąpienie.'),
+                        'desc' => $this->l('Number of days from delivery date (or order date) during which withdrawal is possible.'),
                     ),
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Tryb limitu'),
+                        'label' => $this->l('Limit mode'),
                         'name' => 'WITHDRAWAL_FORM_MODE',
                         'options' => array(
                             'query' => array(
-                                array('id' => 'off', 'name' => $this->l('Wyłączony - brak limitu')),
-                                array('id' => 'soft', 'name' => $this->l('Soft - tylko ostrzeżenie')),
-                                array('id' => 'hard', 'name' => $this->l('Hard - blokada formularza po terminie')),
+                                array('id' => 'off', 'name' => $this->l('Disabled - no limit')),
+                                array('id' => 'soft', 'name' => $this->l('Soft - warning only')),
+                                array('id' => 'hard', 'name' => $this->l('Hard - form blocked after deadline')),
                             ),
                             'id' => 'id',
                             'name' => 'name',
@@ -158,25 +158,25 @@ class WithdrawalForm extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Ogranicz do jednego zgłoszenia na zamówienie'),
+                        'label' => $this->l('Limit to one request per order'),
                         'name' => 'WITHDRAWAL_FORM_ONE_PER_ORDER',
                         'is_bool' => true,
                         'values' => array(
                             array(
                                 'id' => 'active_on',
                                 'value' => 1,
-                                'label' => $this->l('Tak'),
+                                'label' => $this->l('Yes'),
                             ),
                             array(
                                 'id' => 'active_off',
                                 'value' => 0,
-                                'label' => $this->l('Nie'),
+                                'label' => $this->l('No'),
                             ),
                         ),
                     ),
                 ),
                 'submit' => array(
-                    'title' => $this->l('Zapisz'),
+                    'title' => $this->l('Save'),
                 ),
             ),
         );
@@ -256,7 +256,7 @@ class WithdrawalForm extends Module
             'days_limit' => $days_limit
         ));
 
-        return $this->display(__FILE__, 'views/templates/hook/order_detail_button.tpl');
+        return $this->display(__FILE__, 'views/templates/hook/order_detail.tpl');
     }
 
     public function hookActionGetExtraMailTemplateVars($params)
@@ -333,7 +333,7 @@ class WithdrawalForm extends Module
             Mail::Send(
                 (int) $order->id_lang,
                 'withdrawal_link',
-                $this->l('Informacja o prawie do zwrotu towaru'),
+                $this->l('Information about the right to return goods'),
                 $template_vars,
                 $customer->email,
                 $customer->firstname . ' ' . $customer->lastname,

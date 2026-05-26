@@ -31,18 +31,18 @@ class AdminWithdrawalRequestController extends ModuleAdminController
     public function __construct()
     {
         $this->table = 'withdrawal_request';
-        $this->className = 'WithdrawalRequest'; // We don't have a model class, but HelperList needs it or we can bypass
+        $this->className = 'WithdrawalRequest';
         $this->identifier = 'id_withdrawal_request';
         $this->bootstrap = true;
         $this->lang = false;
         $this->explicitSelect = true;
 
-        parent::__construct();
-
         $this->_select = 'o.reference as order_reference, c.email as customer_email';
         $this->_join = '
             LEFT JOIN `' . _DB_PREFIX_ . 'orders` o ON (a.`id_order` = o.`id_order`)
             LEFT JOIN `' . _DB_PREFIX_ . 'customer` c ON (a.`id_customer` = c.`id_customer`)';
+
+        parent::__construct();
 
         $this->fields_list = array(
             'id_withdrawal_request' => array(
@@ -51,28 +51,32 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'width' => 25
             ),
             'id_order' => array(
-                'title' => $this->l('ID zamówienia'),
-                'width' => 25
+                'title' => $this->l('Order ID'),
+                'width' => 25,
+                'filter_key' => 'a!id_order'
             ),
             'order_reference' => array(
-                'title' => $this->l('Referencja zamówienia'),
-                'width' => 100
+                'title' => $this->l('Order reference'),
+                'width' => 100,
+                'filter_key' => 'o!reference'
             ),
             'customer_email' => array(
-                'title' => $this->l('Email klienta'),
-                'width' => 150
+                'title' => $this->l('Customer email'),
+                'width' => 150,
+                'filter_key' => 'c!email'
             ),
             'reason' => array(
-                'title' => $this->l('Powód'),
+                'title' => $this->l('Reason'),
                 'width' => 200
             ),
             'date_add' => array(
-                'title' => $this->l('Data zgłoszenia'),
+                'title' => $this->l('Submission date'),
                 'type' => 'datetime',
-                'width' => 150
+                'width' => 150,
+                'filter_key' => 'a!date_add'
             ),
             'ip_address' => array(
-                'title' => $this->l('Adres IP'),
+                'title' => $this->l('IP address'),
                 'width' => 100
             ),
         );
@@ -80,8 +84,8 @@ class AdminWithdrawalRequestController extends ModuleAdminController
         $this->actions = array('view', 'delete');
         $this->bulk_actions = array(
             'delete' => array(
-                'text' => $this->l('Usuń zaznaczone'),
-                'confirm' => $this->l('Usunąć zaznaczone elementy?'),
+                'text' => $this->l('Delete selected'),
+                'confirm' => $this->l('Delete selected items?'),
                 'icon' => 'icon-trash'
             )
         );
@@ -94,7 +98,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $this->toolbar_btn['export'] = array(
             'href' => self::$currentIndex . '&export' . $this->table . '&token=' . $this->token,
-            'desc' => $this->l('Eksportuj do CSV')
+            'desc' => $this->l('Export to CSV')
         );
     }
 
