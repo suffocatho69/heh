@@ -5,12 +5,13 @@
     <title>Nowe zgłoszenie odstąpienia od umowy</title>
 </head>
 <body>
-    <p>Otrzymano nowe zgłoszenie odstąpienia od umowy.</p>
-    <p><strong>Szczegóły:</strong><br>
-    Zamówienie: {order_reference}<br>
-    Klient: {firstname} {lastname}<br>
-    Powód: {reason}<br>
-    Wiadomość: {message}<br>
-    Data: {date}</p>
+    <p>Otrzymano nowe zgłoszenie odstąpienia od umowy od klienta {firstname} {lastname}.</p>
+    <p><strong>Zamówienie:</strong> {order_reference}</p>
+    <p><strong>Zwracane produkty:</strong><br>
+    {products}</p>
+    <p><strong>Powód:</strong> {reason}</p>
+    <p><strong>Wiadomość:</strong><br>
+    {message}</p>
+    <p>Data: {date}</p>
 </body>
 </html>

@@ -47,7 +47,7 @@ class WithdrawalForm extends Module
         parent::__construct();
 
         $this->displayName = $this->l('Withdraw from contract here');
-        $this->description = $this->l('Allows customers to easily withdraw from a contract directly from their order history.');
+        $this->description = $this->l('Allows customers to easily withdraw from a contract directly from their order history, according to new regulations.');
 
         $this->ps_versions_compliancy = array('min' => '1.7.5', 'max' => '9.9.9');
     }
@@ -60,6 +60,8 @@ class WithdrawalForm extends Module
             $this->registerHook('header') &&
             $this->registerHook('displayOrderDetail') &&
             $this->registerHook('actionGetExtraMailTemplateVars') &&
+            $this->registerHook('moduleRoutes') &&
+            $this->registerHook('displayCheckoutSubtotalDetails') &&
             $this->installTab() &&
             Configuration::updateValue($this->config_prefix . 'DAYS_LIMIT', 14) &&
             Configuration::updateValue($this->config_prefix . 'MODE', 'soft') &&
@@ -222,7 +224,8 @@ class WithdrawalForm extends Module
         $mode = Configuration::get($this->config_prefix . 'MODE');
         $one_per_order = (int) Configuration::get($this->config_prefix . 'ONE_PER_ORDER');
 
-        $order_date = new DateTime($order->date_add);
+        $reference_date = $order->delivery_date && $order->delivery_date != '0000-00-00 00:00:00' ? $order->delivery_date : $order->date_add;
+        $order_date = new DateTime($reference_date);
         $now = new DateTime();
         $diff = $now->diff($order_date)->days;
 
@@ -265,8 +268,35 @@ class WithdrawalForm extends Module
             }
 
             if (isset($order) && Validate::isLoadedObject($order)) {
-                $params['extra_template_vars']['{withdrawal_url}'] = $this->context->link->getModuleLink($this->name, 'form', array('id_order' => $order->id));
+                $params['extra_template_vars']['{withdrawal_url}'] = $this->context->link->getModuleLink(
+                    $this->name,
+                    'form',
+                    array(
+                        'id_order' => $order->id,
+                        'secure_key' => $order->secure_key
+                    )
+                );
             }
         }
+    }
+
+    public function hookModuleRoutes($params)
+    {
+        return [
+            'module-withdrawalform-form' => [
+                'controller' => 'form',
+                'rule' => 'zwroty',
+                'keywords' => [],
+                'params' => [
+                    'fc' => 'module',
+                    'module' => $this->name,
+                ],
+            ],
+        ];
+    }
+
+    public function hookDisplayCheckoutSubtotalDetails($params)
+    {
+        return $this->display(__FILE__, 'views/templates/hook/checkout_info.tpl');
     }
 }

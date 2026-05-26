@@ -32,6 +32,7 @@ $sql[] = 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'withdrawal_request` (
     `id_customer` int(11) NOT NULL,
     `reason` varchar(255) DEFAULT NULL,
     `message` text DEFAULT NULL,
+    `selected_products` text DEFAULT NULL,
     `ip_address` varchar(45) DEFAULT NULL,
     `date_add` datetime NOT NULL,
     PRIMARY KEY (`id_withdrawal_request`),
