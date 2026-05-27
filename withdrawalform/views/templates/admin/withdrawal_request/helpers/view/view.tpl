@@ -1,51 +1,51 @@
 <div class="panel">
     <div class="panel-heading">
-        <i class="icon-info"></i> {l s='Withdrawal Request Details' mod='withdrawalform'}
+        <i class="icon-info"></i> {l s='Szczegóły wniosku o odstąpienie' mod='withdrawalform'}
     </div>
     <div class="form-horizontal">
         <div class="row">
-            <label class="control-label col-lg-3">{l s='Order Reference' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Zamówienie' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.order_reference}</p>
             </div>
         </div>
         <div class="row">
-            <label class="control-label col-lg-3">{l s='Customer' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Klient' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.firstname} {$withdrawal.lastname} ({$withdrawal.customer_email})</p>
             </div>
         </div>
         <div class="row">
-            <label class="control-label col-lg-3">{l s='Date' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Data zgłoszenia' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.date_add}</p>
             </div>
         </div>
         <div class="row">
-            <label class="control-label col-lg-3">{l s='Reason' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Powód' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.reason}</p>
             </div>
         </div>
         <div class="row">
-            <label class="control-label col-lg-3">{l s='Message' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Wiadomość' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.message|nl2br}</p>
             </div>
         </div>
         <div class="row">
-            <label class="control-label col-lg-3">{l s='IP Address' mod='withdrawalform'}:</label>
+            <label class="control-label col-lg-3">{l s='Adres IP' mod='withdrawalform'}:</label>
             <div class="col-lg-9">
                 <p class="form-control-static">{$withdrawal.ip_address}</p>
             </div>
         </div>
         {if $withdrawal.id_order_return}
             <div class="row">
-                <label class="control-label col-lg-3">{l s='PrestaShop Return' mod='withdrawalform'}:</label>
+                <label class="control-label col-lg-3">{l s='Zwrot PrestaShop' mod='withdrawalform'}:</label>
                 <div class="col-lg-9">
                     <p class="form-control-static">
-                        <a href="{$link->getAdminLink('AdminReturn')|escape:'html':'UTF-8'}&id_order_return={$withdrawal.id_order_return|intval}&vieworder_return" class="btn btn-default" target="_blank">
-                            <i class="icon-external-link"></i> #{l s='View Return' mod='withdrawalform'} ({$withdrawal.id_order_return|intval})
+                        <a href="index.php?controller=AdminReturn&id_order_return={$withdrawal.id_order_return|intval}&updateorder_return=1&token={Tools::getAdminTokenLite('AdminReturn')}" class="btn btn-default" target="_blank">
+                            <i class="icon-external-link"></i> {l s='Otwórz zwrot' mod='withdrawalform'} (#{$withdrawal.id_order_return|intval})
                         </a>
                     </p>
                 </div>
@@ -54,13 +54,13 @@
     </div>
 
     <hr>
-    <h3>{l s='Returned Products' mod='withdrawalform'}</h3>
+    <h3>{l s='Zwracane produkty' mod='withdrawalform'}</h3>
     <table class="table">
         <thead>
             <tr>
-                <th>{l s='Reference' mod='withdrawalform'}</th>
-                <th>{l s='Product' mod='withdrawalform'}</th>
-                <th>{l s='Quantity' mod='withdrawalform'}</th>
+                <th>{l s='Referencja' mod='withdrawalform'}</th>
+                <th>{l s='Produkt' mod='withdrawalform'}</th>
+                <th>{l s='Ilość' mod='withdrawalform'}</th>
             </tr>
         </thead>
         <tbody>
@@ -77,7 +77,7 @@
     <div class="panel-footer">
         <form action="{$form_action}" method="post" class="form-inline">
             <div class="form-group">
-                <label for="new_status">{l s='Update Status' mod='withdrawalform'}:</label>
+                <label for="new_status">{l s='Zmień status' mod='withdrawalform'}:</label>
                 <select name="new_status" id="new_status" class="form-control">
                     {foreach from=$statuses key=k item=v}
                         <option value="{$k}" {if $current_status == $k}selected="selected"{/if}>{$v}</option>
@@ -85,7 +85,7 @@
                 </select>
             </div>
             <button type="submit" name="updatestatus" class="btn btn-primary">
-                <i class="icon-save"></i> {l s='Save' mod='withdrawalform'}
+                <i class="icon-save"></i> {l s='Zapisz' mod='withdrawalform'}
             </button>
         </form>
     </div>

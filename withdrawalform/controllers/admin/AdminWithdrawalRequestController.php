@@ -55,17 +55,17 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'filter_key' => 'a!id_withdrawal_request'
             ),
             'id_order' => array(
-                'title' => $this->l('Order ID'),
+                'title' => $this->l('ID zamówienia'),
                 'width' => 25,
                 'filter_key' => 'a!id_order'
             ),
             'order_reference' => array(
-                'title' => $this->l('Order reference'),
+                'title' => $this->l('Numer zamówienia'),
                 'width' => 100,
                 'filter_key' => 'o!reference'
             ),
             'customer_email' => array(
-                'title' => $this->l('Customer email'),
+                'title' => $this->l('Email klienta'),
                 'width' => 150,
                 'filter_key' => 'c!email'
             ),
@@ -167,10 +167,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             return (int)$id_order_return;
         }
 
-        $link = $this->context->link->getAdminLink('AdminReturn', true, [], [
-            'id_order_return' => (int)$id_order_return,
-            'vieworder_return' => 1
-        ]);
+        $link = $this->context->link->getAdminLink('AdminReturn', true) . '&id_order_return=' . (int)$id_order_return . '&updateorder_return=1';
         return '<a href="' . $link . '" class="btn btn-default" target="_blank"><i class="icon-external-link"></i> #' . (int) $id_order_return . '</a>';
     }
 
@@ -257,7 +254,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 }
             </style>
             <div class="panel-heading">
-                <i class="icon-exchange"></i> ' . $this->l('Zwroty produktów — natywny system PrestaShop (Recent 50)') . '
+                <i class="icon-exchange"></i> ' . $this->l('Zwroty produktów — natywny system PrestaShop (ostatnie 50)') . '
             </div>
             <div class="table-responsive">
                 <table class="table">
@@ -278,10 +275,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             $nativeReturnsHtml .= '<tr><td colspan="7" class="text-center">' . $this->l('Brak zwrotów w systemie PrestaShop.') . '</td></tr>';
         } else {
             foreach ($returns as $r) {
-                $link = $this->context->link->getAdminLink('AdminReturn', true, [], [
-                    'id_order_return' => (int)$r['id_order_return'],
-                    'vieworder_return' => 1
-                ]);
+                $link = $this->context->link->getAdminLink('AdminReturn', true) . '&id_order_return=' . (int)$r['id_order_return'] . '&updateorder_return=1';
                 $assoc = $r['id_withdrawal_request'] ? '<span class="label label-success">#' . (int)$r['id_withdrawal_request'] . '</span>' : '<span class="label label-warning">' . $this->l('Brak') . '</span>';
 
                 $nativeReturnsHtml .= '<tr>
@@ -355,9 +349,9 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             'products' => $products_data,
             'current_status' => $res['status'],
             'statuses' => [
-                'pending' => $this->l('Pending'),
-                'accepted' => $this->l('Accepted'),
-                'rejected' => $this->l('Rejected')
+                'pending' => '⏳ Oczekujące',
+                'accepted' => '✅ Przyjęte',
+                'rejected' => '❌ Odrzucone'
             ],
             'form_action' => self::$currentIndex . '&id_withdrawal_request=' . $id . '&viewwithdrawal_request&token=' . $this->token
         ));
