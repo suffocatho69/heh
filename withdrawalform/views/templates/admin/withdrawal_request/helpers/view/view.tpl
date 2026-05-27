@@ -73,4 +73,20 @@
             {/foreach}
         </tbody>
     </table>
+
+    <div class="panel-footer">
+        <form action="{$form_action}" method="post" class="form-inline">
+            <div class="form-group">
+                <label for="new_status">{l s='Update Status' mod='withdrawalform'}:</label>
+                <select name="new_status" id="new_status" class="form-control">
+                    {foreach from=$statuses key=k item=v}
+                        <option value="{$k}" {if $current_status == $k}selected="selected"{/if}>{$v}</option>
+                    {/foreach}
+                </select>
+            </div>
+            <button type="submit" name="updatestatus" class="btn btn-primary">
+                <i class="icon-save"></i> {l s='Save' mod='withdrawalform'}
+            </button>
+        </form>
+    </div>
 </div>

@@ -90,7 +90,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'type' => 'select',
                 'list' => array(
                     'pending' => $this->l('Pending'),
-                    'completed' => $this->l('Completed'),
+                    'accepted' => $this->l('Accepted'),
                     'rejected' => $this->l('Rejected'),
                 ),
                 'filter_key' => 'a!status',
@@ -130,6 +130,30 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
     public function renderList()
     {
+        $db = Db::getInstance();
+        $p  = '`' . _DB_PREFIX_ . 'withdrawal_request`';
+
+        $stats = [
+            'total'    => (int)$db->getValue("SELECT COUNT(*) FROM {$p}"),
+            'pending'  => (int)$db->getValue("SELECT COUNT(*) FROM {$p} WHERE status='pending'"),
+            'accepted' => (int)$db->getValue("SELECT COUNT(*) FROM {$p} WHERE status='accepted'"),
+            'rejected' => (int)$db->getValue("SELECT COUNT(*) FROM {$p} WHERE status='rejected'"),
+            'today'    => (int)$db->getValue("SELECT COUNT(*) FROM {$p} WHERE DATE(date_add)=CURDATE()"),
+            'native'   => (int)$db->getValue('SELECT COUNT(*) FROM `' . _DB_PREFIX_ . 'order_return`'),
+        ];
+
+        $statsHtml = '<div class="panel" style="margin-bottom:15px;">
+            <div class="panel-heading"><i class="icon-bar-chart"></i> ' . $this->l('Statystyki wniosków o odstąpienie') . '</div>
+            <div class="row" style="padding:10px 15px;">
+                <div class="col-lg-2 col-sm-4"><div class="alert alert-info text-center"><h3>' . $stats['total'] . '</h3><p>' . $this->l('Łącznie') . '</p></div></div>
+                <div class="col-lg-2 col-sm-4"><div class="alert alert-warning text-center"><h3>' . $stats['pending'] . '</h3><p>⏳ ' . $this->l('Oczekujące') . '</p></div></div>
+                <div class="col-lg-2 col-sm-4"><div class="alert alert-success text-center"><h3>' . $stats['accepted'] . '</h3><p>✅ ' . $this->l('Przyjęte') . '</p></div></div>
+                <div class="col-lg-2 col-sm-4"><div class="alert alert-danger text-center"><h3>' . $stats['rejected'] . '</h3><p>❌ ' . $this->l('Odrzucone') . '</p></div></div>
+                <div class="col-lg-2 col-sm-4"><div class="alert alert-info text-center"><h3>' . $stats['today'] . '</h3><p>' . $this->l('Dzisiaj') . '</p></div></div>
+                <div class="col-lg-2 col-sm-4"><div class="alert text-center" style="background:#7b68ee;color:#fff;"><h3>' . $stats['native'] . '</h3><p>' . $this->l('Zwroty PS') . '</p></div></div>
+            </div>
+        </div>';
+
         $listHtml = parent::renderList();
 
         // === NATYWNE ZWROTY PS ===
@@ -137,13 +161,15 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             SELECT r.id_order_return, r.id_order, r.question, r.date_add,
                    o.reference AS order_reference,
                    c.firstname, c.lastname, c.email AS customer_email,
-                   rs.name AS state_name, rs.color AS state_color,
+                   rs.name AS state_name, ors.color AS state_color,
                    wr.id_withdrawal_request
             FROM `' . _DB_PREFIX_ . 'order_return` r
             LEFT JOIN `' . _DB_PREFIX_ . 'orders` o
                 ON o.id_order = r.id_order
             LEFT JOIN `' . _DB_PREFIX_ . 'customer` c
                 ON c.id_customer = r.id_customer
+            LEFT JOIN `' . _DB_PREFIX_ . 'order_return_state` ors
+                ON ors.id_order_return_state = r.state
             LEFT JOIN `' . _DB_PREFIX_ . 'order_return_state_lang` rs
                 ON rs.id_order_return_state = r.state
                 AND rs.id_lang = ' . (int)$this->context->language->id . '
@@ -155,29 +181,29 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $nativeReturnsHtml = '<div class="panel col-lg-12">
             <div class="panel-heading">
-                <i class="icon-exchange"></i> ' . $this->l('Native PrestaShop Returns (Recent 50)') . '
+                <i class="icon-exchange"></i> ' . $this->l('Zwroty produktów — natywny system PrestaShop') . '
             </div>
             <div class="table-responsive-row clearfix">
                 <table class="table order_return">
                     <thead>
                         <tr class="nodrag nodrop">
                             <th><span class="title_box">' . $this->l('ID') . '</span></th>
-                            <th><span class="title_box">' . $this->l('Date') . '</span></th>
-                            <th><span class="title_box">' . $this->l('Order') . '</span></th>
-                            <th><span class="title_box">' . $this->l('Customer') . '</span></th>
-                            <th><span class="title_box">' . $this->l('PS Status') . '</span></th>
-                            <th><span class="title_box">' . $this->l('Associated Request') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Data') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Zamówienie') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Klient') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Status PS') . '</span></th>
+                            <th><span class="title_box">' . $this->l('Powiązany wniosek') . '</span></th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>';
 
         if (empty($returns)) {
-            $nativeReturnsHtml .= '<tr><td class="list-empty" colspan="7"><div class="list-empty-msg"><i class="icon-warning-sign list-empty-icon"></i>' . $this->l('No native returns found.') . '</div></td></tr>';
+            $nativeReturnsHtml .= '<tr><td class="list-empty" colspan="7"><div class="list-empty-msg"><i class="icon-warning-sign list-empty-icon"></i>' . $this->l('Brak zwrotów w systemie PrestaShop.') . '</div></td></tr>';
         } else {
             foreach ($returns as $r) {
                 $link = $this->context->link->getAdminLink('AdminReturn') . '&id_order_return=' . (int) $r['id_order_return'] . '&vieworder_return';
-                $assoc = $r['id_withdrawal_request'] ? '<span class="label label-success">#' . (int)$r['id_withdrawal_request'] . '</span>' : '<span class="label label-warning">' . $this->l('None') . '</span>';
+                $assoc = $r['id_withdrawal_request'] ? '<span class="label label-success">#' . (int)$r['id_withdrawal_request'] . '</span>' : '<span class="label label-warning">' . $this->l('Brak') . '</span>';
 
                 $nativeReturnsHtml .= '<tr>
                     <td>' . (int)$r['id_order_return'] . '</td>
@@ -187,7 +213,7 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                     <td><span class="label" style="background-color:' . $r['state_color'] . ';color:white;">' . $r['state_name'] . '</span></td>
                     <td>' . $assoc . '</td>
                     <td class="text-right">
-                        <a href="' . $link . '" class="btn btn-default"><i class="icon-search-plus"></i> ' . $this->l('View') . '</a>
+                        <a href="' . $link . '" class="btn btn-default"><i class="icon-search-plus"></i> ' . $this->l('Otwórz') . '</a>
                     </td>
                 </tr>';
             }
@@ -195,7 +221,24 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $nativeReturnsHtml .= '</tbody></table></div></div>';
 
-        return $listHtml . $nativeReturnsHtml;
+        return $statsHtml . $listHtml . $nativeReturnsHtml;
+    }
+
+    public function postProcess()
+    {
+        if (Tools::isSubmit('updatestatus')) {
+            $id  = (int)Tools::getValue('id_withdrawal_request');
+            $new = Tools::getValue('new_status');
+            if ($id && in_array($new, ['pending', 'accepted', 'rejected'])) {
+                Db::getInstance()->execute(
+                    'UPDATE `' . _DB_PREFIX_ . 'withdrawal_request`
+                     SET status = \'' . pSQL($new) . '\'
+                     WHERE id_withdrawal_request = ' . $id
+                );
+                $this->confirmations[] = $this->l('Status zaktualizowany.');
+            }
+        }
+        return parent::postProcess();
     }
 
     public function renderView()
@@ -229,7 +272,14 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $this->context->smarty->assign(array(
             'withdrawal' => $res,
-            'products' => $products_data
+            'products' => $products_data,
+            'current_status' => $res['status'],
+            'statuses' => [
+                'pending' => $this->l('Pending'),
+                'accepted' => $this->l('Accepted'),
+                'rejected' => $this->l('Rejected')
+            ],
+            'form_action' => self::$currentIndex . '&id_withdrawal_request=' . $id . '&viewwithdrawal_request&token=' . $this->token
         ));
 
         return parent::renderView();
