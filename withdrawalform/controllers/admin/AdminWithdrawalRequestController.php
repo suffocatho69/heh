@@ -70,23 +70,23 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'filter_key' => 'c!email'
             ),
             'reason' => array(
-                'title' => $this->l('Reason'),
+                'title' => $this->l('Powód'),
                 'width' => 200,
                 'filter_key' => 'a!reason'
             ),
             'date_add' => array(
-                'title' => $this->l('Submission date'),
+                'title' => $this->l('Data zgłoszenia'),
                 'type' => 'datetime',
                 'width' => 150,
                 'filter_key' => 'a!date_add'
             ),
             'ip_address' => array(
-                'title' => $this->l('IP address'),
+                'title' => $this->l('Adres IP'),
                 'width' => 100,
                 'filter_key' => 'a!ip_address'
             ),
             'id_order_return' => array(
-                'title' => $this->l('Native Return ID'),
+                'title' => $this->l('ID zwrotu PS'),
                 'width' => 50,
                 'callback' => 'displayNativeReturnLink',
                 'filter_key' => 'a!id_order_return'
@@ -96,9 +96,9 @@ class AdminWithdrawalRequestController extends ModuleAdminController
                 'width' => 100,
                 'type' => 'select',
                 'list' => array(
-                    'pending' => $this->l('Pending'),
-                    'accepted' => $this->l('Accepted'),
-                    'rejected' => $this->l('Rejected'),
+                    'pending' => '⏳ Oczekujące',
+                    'accepted' => '✅ Przyjęte',
+                    'rejected' => '❌ Odrzucone',
                 ),
                 'filter_key' => 'a!status',
             ),
@@ -106,10 +106,20 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
         $this->actions = array('view', 'delete');
         $this->bulk_actions = array(
+            'accept' => array(
+                'text' => $this->l('Oznacz jako przyjęte'),
+                'icon' => 'icon-check',
+                'confirm' => $this->l('Oznaczyć zaznaczone jako przyjęte?'),
+            ),
+            'reject' => array(
+                'text' => $this->l('Oznacz jako odrzucone'),
+                'icon' => 'icon-times',
+                'confirm' => $this->l('Odrzucić zaznaczone wnioski?'),
+            ),
             'delete' => array(
-                'text' => $this->l('Delete selected'),
-                'confirm' => $this->l('Delete selected items?'),
-                'icon' => 'icon-trash'
+                'text' => $this->l('Usuń zaznaczone'),
+                'icon' => 'icon-trash',
+                'confirm' => $this->l('Usunąć zaznaczone wnioski?'),
             )
         );
     }
@@ -296,6 +306,32 @@ class AdminWithdrawalRequestController extends ModuleAdminController
         $nativeReturnsHtml .= '</tbody></table></div></div>';
 
         return $statsHtml . $listHtml . $nativeReturnsHtml;
+    }
+
+    public function processBulkAccept()
+    {
+        $ids = array_map('intval', Tools::getValue($this->table . 'Box'));
+        if (!empty($ids)) {
+            Db::getInstance()->execute(
+                'UPDATE `' . _DB_PREFIX_ . 'withdrawal_request`
+                 SET status = \'accepted\'
+                 WHERE id_withdrawal_request IN (' . implode(',', $ids) . ')'
+            );
+            $this->confirmations[] = $this->l('Status zaktualizowany.');
+        }
+    }
+
+    public function processBulkReject()
+    {
+        $ids = array_map('intval', Tools::getValue($this->table . 'Box'));
+        if (!empty($ids)) {
+            Db::getInstance()->execute(
+                'UPDATE `' . _DB_PREFIX_ . 'withdrawal_request`
+                 SET status = \'rejected\'
+                 WHERE id_withdrawal_request IN (' . implode(',', $ids) . ')'
+            );
+            $this->confirmations[] = $this->l('Status zaktualizowany.');
+        }
     }
 
     public function postProcess()

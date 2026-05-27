@@ -38,8 +38,8 @@ class WithdrawalForm extends Module
     {
         $this->name = 'withdrawalform';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
-        $this->author = 'Jules';
+        $this->version = '1.1.0';
+        $this->author = 'Orientica.pl';
         $this->need_instance = 0;
 
         $this->bootstrap = true;
