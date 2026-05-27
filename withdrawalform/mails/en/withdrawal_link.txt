@@ -1,0 +1,12 @@
+Hello {firstname},
+
+We inform you that your order {order_reference} has been delivered.
+
+According to EU regulations and our terms of service, you have 14 days to withdraw from the contract without giving a reason.
+
+To exercise this right electronically, you can use our convenient return form at this address:
+{withdrawal_url}
+
+Alternatively, you can go to the "Order History" section in your account (if you have one) or contact us via email.
+
+Orientica.pl team

@@ -54,13 +54,6 @@ $columns = Db::getInstance()->executeS(
 );
 $existing = array_column($columns ?: [], 'Field');
 
-if (!in_array('status', $existing)) {
-    Db::getInstance()->execute(
-        'ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request`
-         ADD COLUMN `status` varchar(20) NOT NULL DEFAULT \'pending\'
-         AFTER `id_order_return`'
-    );
-}
 if (!in_array('selected_products', $existing)) {
     Db::getInstance()->execute(
         'ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request`
@@ -71,5 +64,11 @@ if (!in_array('id_order_return', $existing)) {
     Db::getInstance()->execute(
         'ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request`
          ADD COLUMN `id_order_return` int(11) DEFAULT NULL'
+    );
+}
+if (!in_array('status', $existing)) {
+    Db::getInstance()->execute(
+        'ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request`
+         ADD COLUMN `status` varchar(20) NOT NULL DEFAULT \'pending\''
     );
 }

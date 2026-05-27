@@ -88,7 +88,8 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             'id_order_return' => array(
                 'title' => $this->l('Native Return ID'),
                 'width' => 50,
-                'callback' => 'displayNativeReturnLink'
+                'callback' => 'displayNativeReturnLink',
+                'filter_key' => 'a!id_order_return'
             ),
             'status' => array(
                 'title' => $this->l('Status'),
@@ -121,17 +122,24 @@ class AdminWithdrawalRequestController extends ModuleAdminController
 
     protected function ensureColumnsExist()
     {
-        $columns = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'withdrawal_request`');
-        $existing = array_column($columns ?: [], 'Field');
+        try {
+            $columns = Db::getInstance()->executeS('SHOW COLUMNS FROM `' . _DB_PREFIX_ . 'withdrawal_request`');
+            if (!$columns) {
+                return;
+            }
+            $existing = array_column($columns, 'Field');
 
-        if (!in_array('status', $existing)) {
-            Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `status` varchar(20) NOT NULL DEFAULT \'pending\' AFTER `id_order_return`');
-        }
-        if (!in_array('selected_products', $existing)) {
-            Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `selected_products` text DEFAULT NULL AFTER `message`');
-        }
-        if (!in_array('id_order_return', $existing)) {
-            Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `id_order_return` int(11) DEFAULT NULL AFTER `ip_address`');
+            if (!in_array('selected_products', $existing)) {
+                Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `selected_products` text DEFAULT NULL');
+            }
+            if (!in_array('id_order_return', $existing)) {
+                Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `id_order_return` int(11) DEFAULT NULL');
+            }
+            if (!in_array('status', $existing)) {
+                Db::getInstance()->execute('ALTER TABLE `' . _DB_PREFIX_ . 'withdrawal_request` ADD COLUMN `status` varchar(20) NOT NULL DEFAULT \'pending\'');
+            }
+        } catch (Exception $e) {
+            // Silently fail to avoid 500 error if table doesn't exist yet
         }
     }
 
@@ -151,14 +159,28 @@ class AdminWithdrawalRequestController extends ModuleAdminController
     public function displayNativeReturnLink($id_order_return)
     {
         if (!$id_order_return) {
-            return '---';
+            return '';
         }
 
-        $link = $this->context->link->getAdminLink('AdminReturn', true, array(), array(
-            'id_order_return' => (int) $id_order_return,
+        // Return plain ID for export
+        if (Tools::isSubmit('submitExport' . $this->table) || Tools::isSubmit('export' . $this->table)) {
+            return (int)$id_order_return;
+        }
+
+        $link = $this->context->link->getAdminLink('AdminReturn', true, [], [
+            'id_order_return' => (int)$id_order_return,
             'vieworder_return' => 1
-        ));
+        ]);
         return '<a href="' . $link . '" class="btn btn-default" target="_blank"><i class="icon-external-link"></i> #' . (int) $id_order_return . '</a>';
+    }
+
+    public function initContent()
+    {
+        if (Tools::isSubmit('export' . $this->table) || Tools::isSubmit('submitExport' . $this->table)) {
+            $this->processExport();
+            die();
+        }
+        parent::initContent();
     }
 
     public function renderList()
@@ -178,11 +200,11 @@ class AdminWithdrawalRequestController extends ModuleAdminController
         $statsHtml = '<div class="panel" style="margin-bottom:15px;">
             <div class="panel-heading"><i class="icon-bar-chart"></i> ' . $this->l('Statystyki wniosków o odstąpienie') . '</div>
             <div class="row" style="padding:10px 15px;">
-                <div class="col-lg-2 col-xs-6"><div class="alert alert-info text-center" style="background-color:#e1f5fe; border:1px solid #b3e5fc;"><h3 style="margin:5px 0;">' . $stats['total'] . '</h3><p style="margin:0; font-weight:bold;">' . $this->l('Łącznie') . '</p></div></div>
-                <div class="col-lg-2 col-xs-6"><div class="alert alert-warning text-center" style="background-color:#fffde7; border:1px solid #fff9c4;"><h3 style="margin:5px 0;">' . $stats['pending'] . '</h3><p style="margin:0; font-weight:bold;">⏳ ' . $this->l('Oczekujące') . '</p></div></div>
-                <div class="col-lg-2 col-xs-6"><div class="alert alert-success text-center" style="background-color:#e8f5e9; border:1px solid #c8e6c9;"><h3 style="margin:5px 0;">' . $stats['accepted'] . '</h3><p style="margin:0; font-weight:bold;">✅ ' . $this->l('Przyjęte') . '</p></div></div>
-                <div class="col-lg-2 col-xs-6"><div class="alert alert-danger text-center" style="background-color:#ffebee; border:1px solid #ffcdd2;"><h3 style="margin:5px 0;">' . $stats['rejected'] . '</h3><p style="margin:0; font-weight:bold;">❌ ' . $this->l('Odrzucone') . '</p></div></div>
-                <div class="col-lg-2 col-xs-6"><div class="alert alert-info text-center" style="background-color:#f3e5f5; border:1px solid #e1bee7;"><h3 style="margin:5px 0;">' . $stats['today'] . '</h3><p style="margin:0; font-weight:bold;">' . $this->l('Dzisiaj') . '</p></div></div>
+                <div class="col-lg-2 col-xs-6"><div class="alert alert-info text-center" style="background-color:#e1f5fe; border:1px solid #b3e5fc; color:#01579b;"><h3 style="margin:5px 0;">' . $stats['total'] . '</h3><p style="margin:0; font-weight:bold;">' . $this->l('Łącznie') . '</p></div></div>
+                <div class="col-lg-2 col-xs-6"><div class="alert alert-warning text-center" style="background-color:#fffde7; border:1px solid #fff9c4; color:#f57f17;"><h3 style="margin:5px 0;">' . $stats['pending'] . '</h3><p style="margin:0; font-weight:bold;">⏳ ' . $this->l('Oczekujące') . '</p></div></div>
+                <div class="col-lg-2 col-xs-6"><div class="alert alert-success text-center" style="background-color:#e8f5e9; border:1px solid #c8e6c9; color:#1b5e20;"><h3 style="margin:5px 0;">' . $stats['accepted'] . '</h3><p style="margin:0; font-weight:bold;">✅ ' . $this->l('Przyjęte') . '</p></div></div>
+                <div class="col-lg-2 col-xs-6"><div class="alert alert-danger text-center" style="background-color:#ffebee; border:1px solid #ffcdd2; color:#b71c1c;"><h3 style="margin:5px 0;">' . $stats['rejected'] . '</h3><p style="margin:0; font-weight:bold;">❌ ' . $this->l('Odrzucone') . '</p></div></div>
+                <div class="col-lg-2 col-xs-6"><div class="alert alert-info text-center" style="background-color:#f3e5f5; border:1px solid #e1bee7; color:#4a148c;"><h3 style="margin:5px 0;">' . $stats['today'] . '</h3><p style="margin:0; font-weight:bold;">' . $this->l('Dzisiaj') . '</p></div></div>
                 <div class="col-lg-2 col-xs-6"><div class="alert text-center" style="background:#7b68ee; color:#fff; border:1px solid #5e4bcf;"><h3 style="margin:5px 0; color:#fff;">' . $stats['native'] . '</h3><p style="margin:0; font-weight:bold;">' . $this->l('Zwroty PS') . '</p></div></div>
             </div>
         </div>';
@@ -212,37 +234,72 @@ class AdminWithdrawalRequestController extends ModuleAdminController
             LIMIT 50
         ') ?: [];
 
-        $helper = new HelperList();
-        $helper->shopLinkType = '';
-        $helper->simple_header = true;
-        $helper->identifier = 'id_order_return';
-        $helper->show_toolbar = false;
-        $helper->title = $this->l('Zwroty produktów — natywny system PrestaShop');
-        $helper->table = 'order_return';
-        $helper->token = Tools::getAdminTokenLite('AdminReturn');
-        $helper->currentIndex = $this->context->link->getAdminLink('AdminReturn', false);
+        $nativeReturnsHtml = '<div class="panel col-lg-12" id="native_returns_panel">
+            <style>
+                @media (max-width: 991px) {
+                    #native_returns_panel .table-responsive table,
+                    #native_returns_panel .table-responsive thead,
+                    #native_returns_panel .table-responsive tbody,
+                    #native_returns_panel .table-responsive th,
+                    #native_returns_panel .table-responsive td,
+                    #native_returns_panel .table-responsive tr { display: block; }
+                    #native_returns_panel .table-responsive thead tr { position: absolute; top: -9999px; left: -9999px; }
+                    #native_returns_panel .table-responsive tr { border: 1px solid #ccc; margin-bottom: 10px; }
+                    #native_returns_panel .table-responsive td { border: none; border-bottom: 1px solid #eee; position: relative; padding-left: 50% !important; text-align: right; }
+                    #native_returns_panel .table-responsive td:before { position: absolute; left: 10px; width: 45%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: bold; }
+                    #native_returns_panel .table-responsive td:nth-child(1):before { content: "ID"; }
+                    #native_returns_panel .table-responsive td:nth-child(2):before { content: "' . $this->l('Data') . '"; }
+                    #native_returns_panel .table-responsive td:nth-child(3):before { content: "' . $this->l('Zamówienie') . '"; }
+                    #native_returns_panel .table-responsive td:nth-child(4):before { content: "' . $this->l('Klient') . '"; }
+                    #native_returns_panel .table-responsive td:nth-child(5):before { content: "' . $this->l('Status PS') . '"; }
+                    #native_returns_panel .table-responsive td:nth-child(6):before { content: "' . $this->l('Powiązany wniosek') . '"; }
+                    #native_returns_panel .table-responsive td:nth-child(7):before { content: "' . $this->l('Akcje') . '"; }
+                }
+            </style>
+            <div class="panel-heading">
+                <i class="icon-exchange"></i> ' . $this->l('Zwroty produktów — natywny system PrestaShop (Recent 50)') . '
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>' . $this->l('Data') . '</th>
+                            <th>' . $this->l('Zamówienie') . '</th>
+                            <th>' . $this->l('Klient') . '</th>
+                            <th>' . $this->l('Status PS') . '</th>
+                            <th>' . $this->l('Powiązany wniosek') . '</th>
+                            <th class="text-right">' . $this->l('Akcje') . '</th>
+                        </tr>
+                    </thead>
+                    <tbody>';
 
-        $fields_list = array(
-            'id_order_return' => array('title' => $this->l('ID'), 'width' => 25),
-            'date_add' => array('title' => $this->l('Data'), 'type' => 'datetime'),
-            'order_reference' => array('title' => $this->l('Zamówienie')),
-            'customer_email' => array('title' => $this->l('Klient')),
-            'state_name' => array(
-                'title' => $this->l('Status PS'),
-                'callback' => 'displayPSStatus'
-            ),
-            'id_withdrawal_request' => array(
-                'title' => $this->l('Powiązany wniosek'),
-                'callback' => 'displayAssociatedRequest'
-            ),
-        );
+        if (empty($returns)) {
+            $nativeReturnsHtml .= '<tr><td colspan="7" class="text-center">' . $this->l('Brak zwrotów w systemie PrestaShop.') . '</td></tr>';
+        } else {
+            foreach ($returns as $r) {
+                $link = $this->context->link->getAdminLink('AdminReturn', true, [], [
+                    'id_order_return' => (int)$r['id_order_return'],
+                    'vieworder_return' => 1
+                ]);
+                $assoc = $r['id_withdrawal_request'] ? '<span class="label label-success">#' . (int)$r['id_withdrawal_request'] . '</span>' : '<span class="label label-warning">' . $this->l('Brak') . '</span>';
 
-        foreach ($returns as &$r) {
-            $r['customer_email'] = $r['firstname'] . ' ' . $r['lastname'] . ' (' . $r['customer_email'] . ')';
+                $nativeReturnsHtml .= '<tr>
+                    <td>' . (int)$r['id_order_return'] . '</td>
+                    <td>' . $r['date_add'] . '</td>
+                    <td>' . $r['order_reference'] . '</td>
+                    <td>' . $r['firstname'] . ' ' . $r['lastname'] . ' (' . $r['customer_email'] . ')</td>
+                    <td><span class="label" style="background-color:' . $r['state_color'] . '; color:white;">' . $r['state_name'] . '</span></td>
+                    <td>' . $assoc . '</td>
+                    <td class="text-right">
+                        <a href="' . $link . '" class="btn btn-default" title="' . $this->l('Otwórz') . '">
+                            <i class="icon-search-plus"></i> ' . $this->l('Otwórz') . '
+                        </a>
+                    </td>
+                </tr>';
+            }
         }
-
-        $helper->actions = array('view');
-        $nativeReturnsHtml = $helper->generateList($returns, $fields_list);
+        $nativeReturnsHtml .= '</tbody></table></div></div>';
 
         return $statsHtml . $listHtml . $nativeReturnsHtml;
     }
