@@ -1,0 +1,18 @@
+<?php
+global $_MODULE;
+$_MODULE = array();
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_5a2f4e0cdae16ec7db7cd7cb68e3ebfc'] = 'Google reCAPTCHA V3';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_890a496549b635dd7642842ba85439d5'] = 'Chroń swój sklep przed spamem i botami używając Google reCAPTCHA V3.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_f4f70727dc34561dfde1a3c529b6205c'] = 'Ustawienia';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_20f4f54341e68e01b853e9483e5fe37f'] = 'Klucz witryny';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_5eb6bb157528b365f84c27bb4784031b'] = 'Klucz prywatny';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_2a63f555989152ba866b43a1faacd680'] = 'Próg';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_73beefc5be70147131dfa5ba9e655ea8'] = 'Minimalny wynik (0.0 do 1.0), aby uznać użytkownika za człowieka. Domyślnie 0.5.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_24d27016acee2e147668b92b4fb9910b'] = 'Chroń formularz kontaktowy';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_4ee8bc070d7b47734f6fa01df7c746f0'] = 'Chroń formularz rejestracji';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_1e0787d0efe32acbc9986558e57673db'] = 'Chroń formularz logowania';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_c9cc8cce247e49bae79f15173ce97354'] = 'Zapisz';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_00d23a76e43b46dae9ec7aa9dcbebb32'] = 'Włączone';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_b9f5c797ebbf55adccdd8539a65a0241'] = 'Wyłączone';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_f38f5974cdc23279ffe6d203641a8bdf'] = 'Ustawienia zaktualizowane.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_336024b3b6d87dc1bf0f4d06148d6b0a'] = 'Weryfikacja reCAPTCHA nie powiodła się. Proszę spróbować ponownie.';
