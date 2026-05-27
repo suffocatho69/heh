@@ -56,7 +56,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
         $is_expired = ($diff > $days_limit);
 
         if ($mode === 'hard' && $is_expired) {
-            $this->errors[] = $this->module->l('The withdrawal period for this order has expired.');
+            $this->errors[] = $this->module->l('Termin odstąpienia od umowy dla tego zamówienia upłynął.');
         }
 
         if ($one_per_order) {
@@ -66,13 +66,13 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
                 WHERE id_order = ' . (int) $order->id
             );
             if ($already_submitted) {
-                $this->errors[] = $this->module->l('A withdrawal request has already been submitted for this order.');
+                $this->errors[] = $this->module->l('Wniosek o odstąpienie od umowy dla tego zamówienia został już złożony.');
             }
         }
 
         if (Tools::isSubmit('submitWithdrawal')) {
             if (!Tools::getValue('token') || Tools::getValue('token') != Tools::getToken(false)) {
-                $this->errors[] = $this->module->l('Invalid security token.');
+                $this->errors[] = $this->module->l('Nieprawidłowy token bezpieczeństwa.');
             }
 
             $reason = Tools::getValue('reason');
@@ -82,7 +82,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
             $selected_products = [];
 
             if (empty($product_ids) || !is_array($product_ids)) {
-                $this->errors[] = $this->module->l('Please select at least one product.');
+                $this->errors[] = $this->module->l('Wybierz co najmniej jeden produkt.');
             } else {
                 $order_products = $order->getProducts();
                 $op_indexed = [];
@@ -101,7 +101,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
 
                     if ($requested_qty <= 0 || $requested_qty > $available_qty) {
                         $this->errors[] = sprintf(
-                            $this->module->l('Invalid quantity for product %s.'),
+                            $this->module->l('Nieprawidłowa ilość dla produktu %s.'),
                             $op_indexed[$id_order_detail]['product_name']
                         );
                     } else {
@@ -118,6 +118,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
                 $withdrawal->message = $message;
                 $withdrawal->selected_products = json_encode($selected_products);
                 $withdrawal->ip_address = Tools::getRemoteAddr();
+                $withdrawal->status = 'pending';
                 $withdrawal->date_add = date('Y-m-d H:i:s');
 
                 // Create PrestaShop native OrderReturn
@@ -144,13 +145,13 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
                     $customer_msg = new CustomerMessage();
                     $customer_msg->id_customer_thread = $this->getOrCreateCustomerThread($order);
                     $customer_msg->id_employee = 0;
-                    $customer_msg->message = $this->module->l('Withdrawal request submitted for products:') . ' ' . $this->getProductsString($order, $selected_products);
+                    $customer_msg->message = $this->module->l('Złożono wniosek o odstąpienie dla produktów:') . ' ' . $this->getProductsString($order, $selected_products);
                     $customer_msg->private = 1;
                     $customer_msg->add();
 
                     $this->context->smarty->assign('success', true);
                 } else {
-                    $this->errors[] = $this->module->l('An error occurred while saving your request.');
+                    $this->errors[] = $this->module->l('Wystąpił błąd podczas zapisywania wniosku.');
                 }
             }
         }
@@ -233,7 +234,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
         Mail::Send(
             $this->context->language->id,
             'withdrawal_conf',
-            $this->module->l('Withdrawal request confirmation'),
+            $this->module->l('Potwierdzenie odstąpienia od umowy'),
             $template_vars,
             $customer->email,
             $customer->firstname . ' ' . $customer->lastname,
@@ -248,7 +249,7 @@ class WithdrawalFormFormModuleFrontController extends ModuleFrontController
         Mail::Send(
             $this->context->language->id,
             'withdrawal_admin',
-            $this->module->l('New withdrawal request'),
+            $this->module->l('Nowy wniosek o odstąpienie od umowy'),
             $template_vars,
             Configuration::get('PS_SHOP_EMAIL'),
             null,

@@ -85,7 +85,7 @@ class WithdrawalForm extends Module
         $tab = new Tab();
         $tab->class_name = 'AdminWithdrawalRequest';
         $tab->module = $this->name;
-        $tab->id_parent = (int) Tab::getIdFromClassName('AdminParentCustomer');
+        $tab->id_parent = (int) Tab::getIdFromClassName('AdminParentOrders');
         $tab->active = 1;
 
         $languages = Language::getLanguages();
