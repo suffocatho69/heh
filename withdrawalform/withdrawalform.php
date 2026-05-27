@@ -46,8 +46,8 @@ class WithdrawalForm extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Withdraw from the contract here');
-        $this->description = $this->l('Allows customers to easily withdraw from the contract directly from the order history, in accordance with new regulations.');
+        $this->displayName = $this->l('Odstąp od umowy tutaj');
+        $this->description = $this->l('Umożliwia klientom odstąpienie od umowy zgodnie z dyrektywą UE 2019/2161 (Omnibus).');
 
         $this->ps_versions_compliancy = array('min' => '1.7.5', 'max' => '9.9.9');
     }
@@ -90,7 +90,7 @@ class WithdrawalForm extends Module
 
         $languages = Language::getLanguages();
         foreach ($languages as $lang) {
-            $tab->name[$lang['id_lang']] = $this->l('Withdrawal requests');
+            $tab->name[$lang['id_lang']] = $this->l('Wnioski o odstąpienie');
         }
 
         return $tab->add();
@@ -136,21 +136,21 @@ class WithdrawalForm extends Module
                 'input' => array(
                     array(
                         'type' => 'text',
-                        'label' => $this->l('Withdrawal days limit'),
+                        'label' => $this->l('Limit dni na odstąpienie'),
                         'name' => 'WITHDRAWAL_FORM_DAYS_LIMIT',
                         'size' => 20,
                         'required' => true,
-                        'desc' => $this->l('Number of days from delivery date (or order date) during which withdrawal is possible.'),
+                        'desc' => $this->l('Liczba dni od daty dostawy (lub zamówienia), w których możliwe jest odstąpienie.'),
                     ),
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Limit mode'),
+                        'label' => $this->l('Tryb limitu'),
                         'name' => 'WITHDRAWAL_FORM_MODE',
                         'options' => array(
                             'query' => array(
-                                array('id' => 'off', 'name' => $this->l('Disabled - no limit')),
-                                array('id' => 'soft', 'name' => $this->l('Soft - warning only')),
-                                array('id' => 'hard', 'name' => $this->l('Hard - form blocked after deadline')),
+                                array('id' => 'off', 'name' => $this->l('Wyłączony — brak limitu')),
+                                array('id' => 'soft', 'name' => $this->l('Miękki — tylko ostrzeżenie')),
+                                array('id' => 'hard', 'name' => $this->l('Twardy — formularz zablokowany po terminie')),
                             ),
                             'id' => 'id',
                             'name' => 'name',
@@ -158,7 +158,7 @@ class WithdrawalForm extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Limit to one request per order'),
+                        'label' => $this->l('Ogranicz do jednego wniosku na zamówienie'),
                         'name' => 'WITHDRAWAL_FORM_ONE_PER_ORDER',
                         'is_bool' => true,
                         'values' => array(
