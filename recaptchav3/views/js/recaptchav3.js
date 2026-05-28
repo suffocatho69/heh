@@ -5,21 +5,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function handleFormSubmission(form, actionName) {
         form.addEventListener('submit', function(e) {
-            if (form.querySelector('input[name="recaptcha_token"]')) {
-                return; // Token already added and form is being submitted
+            // Check if we are already submitting with a fresh token
+            if (form.dataset.recaptchaSubmitting === 'true') {
+                return;
             }
 
             e.preventDefault();
 
             grecaptcha.ready(function() {
                 grecaptcha.execute(recaptchav3_site_key, {action: actionName}).then(function(token) {
+                    // Remove old token if exists
+                    var oldInput = form.querySelector('input[name="recaptcha_token"]');
+                    if (oldInput) {
+                        oldInput.remove();
+                    }
+
                     var hiddenInput = document.createElement('input');
                     hiddenInput.setAttribute('type', 'hidden');
                     hiddenInput.setAttribute('name', 'recaptcha_token');
                     hiddenInput.setAttribute('value', token);
                     form.appendChild(hiddenInput);
 
-                    // Re-submit the form
+                    // Mark form as submitting to avoid recursion
+                    form.dataset.recaptchaSubmitting = 'true';
                     form.submit();
                 });
             });
@@ -37,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Registration Form
     if (recaptchav3_enable_register) {
         var registerForm = document.querySelector('#customer-form');
-        if (registerForm && registerForm.action.indexOf('create_account') !== -1) {
+        if (registerForm) {
              handleFormSubmission(registerForm, 'register');
         }
     }

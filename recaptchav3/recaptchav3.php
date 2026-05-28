@@ -29,7 +29,7 @@ class Recaptchav3 extends Module
     {
         $this->name = 'recaptchav3';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
+        $this->version = '1.1.0';
         $this->author = 'Orientica.pl';
         $this->need_instance = 0;
 
@@ -38,7 +38,7 @@ class Recaptchav3 extends Module
         parent::__construct();
 
         $this->displayName = $this->l('Google reCAPTCHA V3');
-        $this->description = $this->l('Protect your store from spam and bots using Google reCAPTCHA V3.');
+        $this->description = $this->l('Chroń swój sklep przed spamem i botami używając Google reCAPTCHA V3.');
 
         $this->ps_versions_compliancy = array('min' => '1.7.0', 'max' => _PS_VERSION_);
     }
@@ -48,8 +48,6 @@ class Recaptchav3 extends Module
         return parent::install() &&
             $this->registerHook('header') &&
             $this->registerHook('actionContactFormSubmitBefore') &&
-            $this->registerHook('validateCustomerForm') &&
-            $this->registerHook('actionCustomerAuthenticateBefore') &&
             Configuration::updateValue($this->config_prefix . 'SITE_KEY', '') &&
             Configuration::updateValue($this->config_prefix . 'SECRET_KEY', '') &&
             Configuration::updateValue($this->config_prefix . 'THRESHOLD', 0.5) &&
@@ -74,14 +72,22 @@ class Recaptchav3 extends Module
         $output = '';
 
         if (Tools::isSubmit('submit' . $this->name)) {
-            Configuration::updateValue($this->config_prefix . 'SITE_KEY', Tools::getValue('RECAPTCHAV3_SITE_KEY'));
-            Configuration::updateValue($this->config_prefix . 'SECRET_KEY', Tools::getValue('RECAPTCHAV3_SECRET_KEY'));
-            Configuration::updateValue($this->config_prefix . 'THRESHOLD', (float) Tools::getValue('RECAPTCHAV3_THRESHOLD'));
-            Configuration::updateValue($this->config_prefix . 'ENABLE_CONTACT', (int) Tools::getValue('RECAPTCHAV3_ENABLE_CONTACT'));
-            Configuration::updateValue($this->config_prefix . 'ENABLE_REGISTER', (int) Tools::getValue('RECAPTCHAV3_ENABLE_REGISTER'));
-            Configuration::updateValue($this->config_prefix . 'ENABLE_LOGIN', (int) Tools::getValue('RECAPTCHAV3_ENABLE_LOGIN'));
+            $site_key = Tools::getValue('RECAPTCHAV3_SITE_KEY');
+            $secret_key = Tools::getValue('RECAPTCHAV3_SECRET_KEY');
+            $threshold = (float) Tools::getValue('RECAPTCHAV3_THRESHOLD');
 
-            $output .= $this->displayConfirmation($this->l('Settings updated.'));
+            if (empty($site_key) || empty($secret_key)) {
+                $output .= $this->displayError($this->l('Site Key and Secret Key are required.'));
+            } else {
+                Configuration::updateValue($this->config_prefix . 'SITE_KEY', $site_key);
+                Configuration::updateValue($this->config_prefix . 'SECRET_KEY', $secret_key);
+                Configuration::updateValue($this->config_prefix . 'THRESHOLD', $threshold);
+                Configuration::updateValue($this->config_prefix . 'ENABLE_CONTACT', (int) Tools::getValue('RECAPTCHAV3_ENABLE_CONTACT'));
+                Configuration::updateValue($this->config_prefix . 'ENABLE_REGISTER', (int) Tools::getValue('RECAPTCHAV3_ENABLE_REGISTER'));
+                Configuration::updateValue($this->config_prefix . 'ENABLE_LOGIN', (int) Tools::getValue('RECAPTCHAV3_ENABLE_LOGIN'));
+
+                $output .= $this->displayConfirmation($this->l('Settings updated.'));
+            }
         }
 
         return $output . $this->renderForm();
@@ -103,7 +109,7 @@ class Recaptchav3 extends Module
                         'required' => true,
                     ),
                     array(
-                        'type' => 'text',
+                        'type' => 'password',
                         'label' => $this->l('Secret Key'),
                         'name' => 'RECAPTCHAV3_SECRET_KEY',
                         'required' => true,
@@ -220,31 +226,7 @@ class Recaptchav3 extends Module
         }
     }
 
-    public function hookValidateCustomerForm($params)
-    {
-        if (!Configuration::get($this->config_prefix . 'ENABLE_REGISTER')) {
-            return;
-        }
-
-        // Registration form usually doesn't have a direct 'errors' array in $params that we can just append to for immediate display in some versions,
-        // but adding to controller errors often works or we can use the field validation if we had a specific field.
-        if (!$this->validateToken('register')) {
-            $this->context->controller->errors[] = $this->l('reCAPTCHA verification failed. Please try again.');
-        }
-    }
-
-    public function hookActionCustomerAuthenticateBefore($params)
-    {
-        if (!Configuration::get($this->config_prefix . 'ENABLE_LOGIN')) {
-            return;
-        }
-
-        if (!$this->validateToken('login')) {
-            $this->context->controller->errors[] = $this->l('reCAPTCHA verification failed. Please try again.');
-        }
-    }
-
-    protected function validateToken($action)
+    public function validateToken($action)
     {
         $token = Tools::getValue('recaptcha_token');
         $secret_key = Configuration::get($this->config_prefix . 'SECRET_KEY');
@@ -274,16 +256,25 @@ class Recaptchav3 extends Module
             'remoteip' => Tools::getRemoteAddr(),
         );
 
-        $options = array(
-            'http' => array(
-                'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-                'method'  => 'POST',
-                'content' => http_build_query($data),
-            ),
-        );
-
-        $context  = stream_context_create($options);
-        $result = file_get_contents($url, false, $context);
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $result = curl_exec($ch);
+            curl_close($ch);
+        } else {
+            $options = array(
+                'http' => array(
+                    'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+                    'method'  => 'POST',
+                    'content' => http_build_query($data),
+                ),
+            );
+            $context  = stream_context_create($options);
+            $result = file_get_contents($url, false, $context);
+        }
 
         if ($result === false) {
             return null;
