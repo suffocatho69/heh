@@ -24,7 +24,7 @@ class CustomerLoginForm extends CustomerLoginFormCore
         if (Module::isEnabled('recaptchav3') && Configuration::get('RECAPTCHAV3_ENABLE_LOGIN')) {
             $recaptcha = Module::getInstanceByName('recaptchav3');
             if (!$recaptcha->validateToken('login')) {
-                $this->errors[''][] = $recaptcha->l('reCAPTCHA verification failed. Please try again.');
+                $this->errors[''][] = $recaptcha->l('Weryfikacja reCAPTCHA nie powiodła się. Spróbuj ponownie.');
                 return false;
             }
         }

@@ -48,12 +48,14 @@ class Recaptchav3 extends Module
         return parent::install() &&
             $this->registerHook('header') &&
             $this->registerHook('actionContactFormSubmitBefore') &&
+            $this->registerHook('actionDispatcher') &&
             Configuration::updateValue($this->config_prefix . 'SITE_KEY', '') &&
             Configuration::updateValue($this->config_prefix . 'SECRET_KEY', '') &&
             Configuration::updateValue($this->config_prefix . 'THRESHOLD', 0.5) &&
             Configuration::updateValue($this->config_prefix . 'ENABLE_CONTACT', 1) &&
             Configuration::updateValue($this->config_prefix . 'ENABLE_REGISTER', 1) &&
-            Configuration::updateValue($this->config_prefix . 'ENABLE_LOGIN', 1);
+            Configuration::updateValue($this->config_prefix . 'ENABLE_LOGIN', 1) &&
+            Configuration::updateValue($this->config_prefix . 'ENABLE_ORDER', 1);
     }
 
     public function uninstall()
@@ -64,7 +66,8 @@ class Recaptchav3 extends Module
             Configuration::deleteByName($this->config_prefix . 'THRESHOLD') &&
             Configuration::deleteByName($this->config_prefix . 'ENABLE_CONTACT') &&
             Configuration::deleteByName($this->config_prefix . 'ENABLE_REGISTER') &&
-            Configuration::deleteByName($this->config_prefix . 'ENABLE_LOGIN');
+            Configuration::deleteByName($this->config_prefix . 'ENABLE_LOGIN') &&
+            Configuration::deleteByName($this->config_prefix . 'ENABLE_ORDER');
     }
 
     public function getContent()
@@ -72,6 +75,7 @@ class Recaptchav3 extends Module
         $output = '';
 
         if (Tools::isSubmit('submit' . $this->name)) {
+            $this->registerHook('actionDispatcher');
             $site_key = Tools::getValue('RECAPTCHAV3_SITE_KEY');
             $secret_key = Tools::getValue('RECAPTCHAV3_SECRET_KEY');
             $threshold = (float) Tools::getValue('RECAPTCHAV3_THRESHOLD');
@@ -99,6 +103,7 @@ class Recaptchav3 extends Module
                 Configuration::updateValue($this->config_prefix . 'ENABLE_CONTACT', (int) Tools::getValue('RECAPTCHAV3_ENABLE_CONTACT'));
                 Configuration::updateValue($this->config_prefix . 'ENABLE_REGISTER', (int) Tools::getValue('RECAPTCHAV3_ENABLE_REGISTER'));
                 Configuration::updateValue($this->config_prefix . 'ENABLE_LOGIN', (int) Tools::getValue('RECAPTCHAV3_ENABLE_LOGIN'));
+                Configuration::updateValue($this->config_prefix . 'ENABLE_ORDER', (int) Tools::getValue('RECAPTCHAV3_ENABLE_ORDER'));
 
                 $output .= $this->displayConfirmation($this->l('Settings updated.'));
             }
@@ -167,6 +172,16 @@ class Recaptchav3 extends Module
                             array('id' => 'active_off', 'value' => 0, 'label' => $this->l('Disabled')),
                         ),
                     ),
+                    array(
+                        'type' => 'switch',
+                        'label' => $this->l('Protect Order Process'),
+                        'name' => 'RECAPTCHAV3_ENABLE_ORDER',
+                        'is_bool' => true,
+                        'values' => array(
+                            array('id' => 'active_on', 'value' => 1, 'label' => $this->l('Enabled')),
+                            array('id' => 'active_off', 'value' => 0, 'label' => $this->l('Disabled')),
+                        ),
+                    ),
                 ),
                 'submit' => array(
                     'title' => $this->l('Save'),
@@ -202,13 +217,14 @@ class Recaptchav3 extends Module
             'RECAPTCHAV3_ENABLE_CONTACT' => Configuration::get($this->config_prefix . 'ENABLE_CONTACT'),
             'RECAPTCHAV3_ENABLE_REGISTER' => Configuration::get($this->config_prefix . 'ENABLE_REGISTER'),
             'RECAPTCHAV3_ENABLE_LOGIN' => Configuration::get($this->config_prefix . 'ENABLE_LOGIN'),
+            'RECAPTCHAV3_ENABLE_ORDER' => Configuration::get($this->config_prefix . 'ENABLE_ORDER'),
         );
     }
 
     public function hookHeader()
     {
         $page_name = $this->context->controller->php_self;
-        $allowed_pages = array('contact', 'authentication', 'registration');
+        $allowed_pages = array('contact', 'authentication', 'registration', 'order', 'checkout');
 
         if (!in_array($page_name, $allowed_pages)) {
             return;
@@ -230,6 +246,7 @@ class Recaptchav3 extends Module
             'recaptchav3_enable_contact' => (bool) Configuration::get($this->config_prefix . 'ENABLE_CONTACT'),
             'recaptchav3_enable_register' => (bool) Configuration::get($this->config_prefix . 'ENABLE_REGISTER'),
             'recaptchav3_enable_login' => (bool) Configuration::get($this->config_prefix . 'ENABLE_LOGIN'),
+            'recaptchav3_enable_order' => (bool) Configuration::get($this->config_prefix . 'ENABLE_ORDER'),
         ));
 
         $this->context->controller->registerJavascript(
@@ -246,7 +263,26 @@ class Recaptchav3 extends Module
         }
 
         if (!$this->validateToken('contact')) {
-            $this->context->controller->errors[] = $this->l('reCAPTCHA verification failed. Please try again.');
+            $this->context->controller->errors[] = $this->l('Weryfikacja reCAPTCHA nie powiodła się. Spróbuj ponownie.');
+        }
+    }
+
+    public function hookActionDispatcher($params)
+    {
+        if ($params['controller_type'] != Dispatcher::UNIT_TEST && $params['controller_class'] == 'OrderController') {
+            if (Tools::isSubmit('confirm-addresses') || Tools::isSubmit('confirmDeliveryOption') || Tools::isSubmit('confirm-payment')) {
+                 if (Configuration::get($this->config_prefix . 'ENABLE_ORDER')) {
+                     if (!$this->validateToken('order')) {
+                         $this->context->controller->errors[] = $this->l('Weryfikacja reCAPTCHA nie powiodła się. Spróbuj ponownie.');
+                         // For one-page checkout or ajax requests, we might need to handle this differently,
+                         // but for standard PS 1.7/8 OrderController, adding to errors usually works.
+                         // However, if it's the final payment step, we might want to redirect back.
+                         if (Tools::isSubmit('confirm-payment')) {
+                             $this->context->controller->step = 4; // Back to payment step
+                         }
+                     }
+                 }
+            }
         }
     }
 
