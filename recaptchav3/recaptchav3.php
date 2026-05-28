@@ -76,11 +76,25 @@ class Recaptchav3 extends Module
             $secret_key = Tools::getValue('RECAPTCHAV3_SECRET_KEY');
             $threshold = (float) Tools::getValue('RECAPTCHAV3_THRESHOLD');
 
-            if (empty($site_key) || empty($secret_key)) {
-                $output .= $this->displayError($this->l('Site Key and Secret Key are required.'));
+            $errors = array();
+            if (empty($site_key)) {
+                $errors[] = $this->l('Site Key is required.');
+            }
+
+            // Only require Secret Key if it's not already set in Configuration
+            if (empty($secret_key) && !Configuration::get($this->config_prefix . 'SECRET_KEY')) {
+                $errors[] = $this->l('Secret Key is required.');
+            }
+
+            if (!empty($errors)) {
+                foreach ($errors as $err) {
+                    $output .= $this->displayError($err);
+                }
             } else {
                 Configuration::updateValue($this->config_prefix . 'SITE_KEY', $site_key);
-                Configuration::updateValue($this->config_prefix . 'SECRET_KEY', $secret_key);
+                if (!empty($secret_key)) {
+                    Configuration::updateValue($this->config_prefix . 'SECRET_KEY', $secret_key);
+                }
                 Configuration::updateValue($this->config_prefix . 'THRESHOLD', $threshold);
                 Configuration::updateValue($this->config_prefix . 'ENABLE_CONTACT', (int) Tools::getValue('RECAPTCHAV3_ENABLE_CONTACT'));
                 Configuration::updateValue($this->config_prefix . 'ENABLE_REGISTER', (int) Tools::getValue('RECAPTCHAV3_ENABLE_REGISTER'));
@@ -180,7 +194,7 @@ class Recaptchav3 extends Module
     {
         return array(
             'RECAPTCHAV3_SITE_KEY' => Configuration::get($this->config_prefix . 'SITE_KEY'),
-            'RECAPTCHAV3_SECRET_KEY' => Configuration::get($this->config_prefix . 'SECRET_KEY'),
+            'RECAPTCHAV3_SECRET_KEY' => '', // Never prefill Secret Key for security
             'RECAPTCHAV3_THRESHOLD' => Configuration::get($this->config_prefix . 'THRESHOLD'),
             'RECAPTCHAV3_ENABLE_CONTACT' => Configuration::get($this->config_prefix . 'ENABLE_CONTACT'),
             'RECAPTCHAV3_ENABLE_REGISTER' => Configuration::get($this->config_prefix . 'ENABLE_REGISTER'),
@@ -190,6 +204,13 @@ class Recaptchav3 extends Module
 
     public function hookHeader()
     {
+        $page_name = $this->context->controller->php_self;
+        $allowed_pages = array('contact', 'authentication', 'registration');
+
+        if (!in_array($page_name, $allowed_pages)) {
+            return;
+        }
+
         $site_key = Configuration::get($this->config_prefix . 'SITE_KEY');
         if (empty($site_key)) {
             return;
