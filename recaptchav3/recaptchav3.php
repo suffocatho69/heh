@@ -126,7 +126,10 @@ class Recaptchav3 extends Module
                         'type' => 'password',
                         'label' => $this->l('Secret Key'),
                         'name' => 'RECAPTCHAV3_SECRET_KEY',
-                        'required' => true,
+                        'required' => (Configuration::get($this->config_prefix . 'SECRET_KEY') ? false : true),
+                        'desc' => Configuration::get($this->config_prefix . 'SECRET_KEY')
+                            ? $this->l('Key is already saved. Leave empty to keep it.')
+                            : $this->l('Please enter your Secret Key.'),
                     ),
                     array(
                         'type' => 'text',
@@ -298,9 +301,16 @@ class Recaptchav3 extends Module
         }
 
         if ($result === false) {
+            PrestaShopLogger::addLog('reCAPTCHA v3: Failed to connect to Google API', 3);
             return null;
         }
 
-        return json_decode($result, true);
+        $decoded_response = json_decode($result, true);
+        if (!$decoded_response || (isset($decoded_response['success']) && $decoded_response['success'] === false)) {
+            $error_codes = isset($decoded_response['error-codes']) ? implode(', ', $decoded_response['error-codes']) : 'no error codes';
+            PrestaShopLogger::addLog('reCAPTCHA v3 verification failed: ' . $error_codes, 3);
+        }
+
+        return $decoded_response;
     }
 }

@@ -16,3 +16,7 @@ $_MODULE['<{recaptchav3}prestashop>recaptchav3_00d23a76e43b46dae9ec7aa9dcbebb32'
 $_MODULE['<{recaptchav3}prestashop>recaptchav3_b9f5c797ebbf55adccdd8539a65a0241'] = 'Wyłączone';
 $_MODULE['<{recaptchav3}prestashop>recaptchav3_f38f5974cdc23279ffe6d203641a8bdf'] = 'Ustawienia zaktualizowane.';
 $_MODULE['<{recaptchav3}prestashop>recaptchav3_336024b3b6d87dc1bf0f4d06148d6b0a'] = 'Weryfikacja reCAPTCHA nie powiodła się. Proszę spróbować ponownie.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_7da59dc8cd5d371b18c232741c834308'] = 'Klucz jest już zapisany. Pozostaw puste, aby go zachować.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_abec4bb127db1c958b8b86a37064446a'] = 'Proszę wpisać klucz prywatny.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_8bc1b596a94c6c70afb58ef2a217cd2e'] = 'Klucz witryny jest wymagany.';
+$_MODULE['<{recaptchav3}prestashop>recaptchav3_838acca85a059f8bc68fdcf83f1511d2'] = 'Klucz prywatny jest wymagany.';
