@@ -1,0 +1,11 @@
+Witaj {firstname} {lastname},
+
+Twoje zamówienie {order_reference} zostało dostarczone.
+
+Informujemy, że zgodnie z prawem masz możliwość odstąpienia od umowy w ciągu 14 dni bez podania przyczyny.
+
+Możesz to zrobić wygodnie za pomocą naszego formularza online, kopiując poniższy link do przeglądarki:
+{withdrawal_url}
+
+Pozdrawiamy,
+Zespół orientica.pl

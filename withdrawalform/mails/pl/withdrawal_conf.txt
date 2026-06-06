@@ -1,6 +1,9 @@
-{firstname} {lastname},
+Witaj {firstname} {lastname},
 
 Twoje zgłoszenie odstąpienia od umowy dla zamówienia {order_reference} zostało przyjęte.
+
+Zwracane produkty:
+{products}
 
 Szczegóły zgłoszenia:
 Powód: {reason}

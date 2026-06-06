@@ -38,16 +38,16 @@ class WithdrawalForm extends Module
     {
         $this->name = 'withdrawalform';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
-        $this->author = 'Jules';
+        $this->version = '1.1.0';
+        $this->author = 'Orientica.pl';
         $this->need_instance = 0;
 
         $this->bootstrap = true;
 
         parent::__construct();
 
-        $this->displayName = $this->l('Withdraw from contract here');
-        $this->description = $this->l('Allows customers to easily withdraw from a contract directly from their order history.');
+        $this->displayName = $this->l('Odstąp od umowy tutaj');
+        $this->description = $this->l('Umożliwia klientom odstąpienie od umowy zgodnie z dyrektywą UE 2019/2161 (Omnibus).');
 
         $this->ps_versions_compliancy = array('min' => '1.7.5', 'max' => '9.9.9');
     }
@@ -60,6 +60,9 @@ class WithdrawalForm extends Module
             $this->registerHook('header') &&
             $this->registerHook('displayOrderDetail') &&
             $this->registerHook('actionGetExtraMailTemplateVars') &&
+            $this->registerHook('actionOrderStatusPostUpdate') &&
+            $this->registerHook('moduleRoutes') &&
+            $this->registerHook('displayCheckoutSubtotalDetails') &&
             $this->installTab() &&
             Configuration::updateValue($this->config_prefix . 'DAYS_LIMIT', 14) &&
             Configuration::updateValue($this->config_prefix . 'MODE', 'soft') &&
@@ -82,12 +85,12 @@ class WithdrawalForm extends Module
         $tab = new Tab();
         $tab->class_name = 'AdminWithdrawalRequest';
         $tab->module = $this->name;
-        $tab->id_parent = (int) Tab::getIdFromClassName('AdminParentCustomer');
+        $tab->id_parent = (int) Tab::getIdFromClassName('AdminParentOrders');
         $tab->active = 1;
 
         $languages = Language::getLanguages();
         foreach ($languages as $lang) {
-            $tab->name[$lang['id_lang']] = $this->l('Withdrawal Requests');
+            $tab->name[$lang['id_lang']] = $this->l('Wnioski o odstąpienie');
         }
 
         return $tab->add();
@@ -133,21 +136,21 @@ class WithdrawalForm extends Module
                 'input' => array(
                     array(
                         'type' => 'text',
-                        'label' => $this->l('Withdrawal limit (days)'),
+                        'label' => $this->l('Limit dni na odstąpienie'),
                         'name' => 'WITHDRAWAL_FORM_DAYS_LIMIT',
                         'size' => 20,
                         'required' => true,
-                        'desc' => $this->l('Number of days from the order date when the withdrawal is allowed (e.g., 14).'),
+                        'desc' => $this->l('Liczba dni od daty dostawy (lub zamówienia), w których możliwe jest odstąpienie.'),
                     ),
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Limit mode'),
+                        'label' => $this->l('Tryb limitu'),
                         'name' => 'WITHDRAWAL_FORM_MODE',
                         'options' => array(
                             'query' => array(
-                                array('id' => 'off', 'name' => $this->l('Disabled - no limit')),
-                                array('id' => 'soft', 'name' => $this->l('Soft - warning only')),
-                                array('id' => 'hard', 'name' => $this->l('Hard - block form after limit')),
+                                array('id' => 'off', 'name' => $this->l('Wyłączony — brak limitu')),
+                                array('id' => 'soft', 'name' => $this->l('Miękki — tylko ostrzeżenie')),
+                                array('id' => 'hard', 'name' => $this->l('Twardy — formularz zablokowany po terminie')),
                             ),
                             'id' => 'id',
                             'name' => 'name',
@@ -155,19 +158,19 @@ class WithdrawalForm extends Module
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->l('Limit to one request per order'),
+                        'label' => $this->l('Ogranicz do jednego wniosku na zamówienie'),
                         'name' => 'WITHDRAWAL_FORM_ONE_PER_ORDER',
                         'is_bool' => true,
                         'values' => array(
                             array(
                                 'id' => 'active_on',
                                 'value' => 1,
-                                'label' => $this->l('Enabled'),
+                                'label' => $this->l('Yes'),
                             ),
                             array(
                                 'id' => 'active_off',
                                 'value' => 0,
-                                'label' => $this->l('Disabled'),
+                                'label' => $this->l('No'),
                             ),
                         ),
                     ),
@@ -222,7 +225,8 @@ class WithdrawalForm extends Module
         $mode = Configuration::get($this->config_prefix . 'MODE');
         $one_per_order = (int) Configuration::get($this->config_prefix . 'ONE_PER_ORDER');
 
-        $order_date = new DateTime($order->date_add);
+        $reference_date = $order->delivery_date && $order->delivery_date != '0000-00-00 00:00:00' ? $order->delivery_date : $order->date_add;
+        $order_date = new DateTime($reference_date);
         $now = new DateTime();
         $diff = $now->diff($order_date)->days;
 
@@ -252,7 +256,7 @@ class WithdrawalForm extends Module
             'days_limit' => $days_limit
         ));
 
-        return $this->display(__FILE__, 'views/templates/hook/order_detail_button.tpl');
+        return $this->display(__FILE__, 'views/templates/hook/order_detail.tpl');
     }
 
     public function hookActionGetExtraMailTemplateVars($params)
@@ -265,8 +269,80 @@ class WithdrawalForm extends Module
             }
 
             if (isset($order) && Validate::isLoadedObject($order)) {
-                $params['extra_template_vars']['{withdrawal_url}'] = $this->context->link->getModuleLink($this->name, 'form', array('id_order' => $order->id));
+                $params['extra_template_vars']['{withdrawal_url}'] = $this->context->link->getModuleLink(
+                    $this->name,
+                    'form',
+                    array(
+                        'id_order' => $order->id,
+                        'secure_key' => $order->secure_key
+                    )
+                );
             }
+        }
+    }
+
+    public function hookModuleRoutes($params)
+    {
+        return [
+            'module-withdrawalform-form' => [
+                'controller' => 'form',
+                'rule' => 'zwroty',
+                'keywords' => [],
+                'params' => [
+                    'fc' => 'module',
+                    'module' => $this->name,
+                ],
+            ],
+        ];
+    }
+
+    public function hookDisplayCheckoutSubtotalDetails($params)
+    {
+        return $this->display(__FILE__, 'views/templates/hook/checkout_info.tpl');
+    }
+
+    public function hookActionOrderStatusPostUpdate($params)
+    {
+        $new_order_status = $params['newOrderStatus'];
+        $id_order = (int) $params['id_order'];
+        $order = new Order($id_order);
+
+        // Standard PrestaShop status for "Delivered" is often 5
+        // But it's better to check if it has the 'delivery' flag or by name
+        if ($new_order_status->delivery || $new_order_status->id == (int) Configuration::get('PS_OS_DELIVERED')) {
+            $customer = new Customer((int) $order->id_customer);
+
+            $withdrawal_url = $this->context->link->getModuleLink(
+                $this->name,
+                'form',
+                array(
+                    'id_order' => $order->id,
+                    'secure_key' => $order->secure_key
+                ),
+                true,
+                (int) $order->id_lang
+            );
+
+            $template_vars = array(
+                '{firstname}' => $customer->firstname,
+                '{lastname}' => $customer->lastname,
+                '{order_reference}' => $order->reference,
+                '{withdrawal_url}' => $withdrawal_url,
+            );
+
+            Mail::Send(
+                (int) $order->id_lang,
+                'withdrawal_link',
+                $this->l('Information about the right to return goods'),
+                $template_vars,
+                $customer->email,
+                $customer->firstname . ' ' . $customer->lastname,
+                null,
+                null,
+                null,
+                null,
+                $this->local_path . 'mails/'
+            );
         }
     }
 }
