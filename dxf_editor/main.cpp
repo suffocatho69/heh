@@ -148,6 +148,8 @@ struct Shape {
     ShapeColor color;
     double thickness; // 0.25, 0.50, etc.
     bool filled;
+    bool is_construction = false; // Construction line flag
+    bool is_selected = false;     // Selection state flag
 };
 
 // Active Tools
@@ -1414,32 +1416,204 @@ void SetActiveTool(ToolType tool) {
 void InitializeBlueprint() {
     shapes_db.clear();
 
-    Shape lineTop; lineTop.type = SHAPE_LINE; lineTop.layer = 2; lineTop.style = STYLE_CONTINUOUS; lineTop.color = COLOR_BLUE; lineTop.thickness = 0.50;
-    lineTop.points = { {100.0, 150.0}, {250.0, 150.0} }; shapes_db.push_back(lineTop);
+    // Scale factor is 2.5 pixels per millimeter
+    double scale = 2.5;
+    double cx = 320.0, cy = 320.0;
 
-    Shape lineBottom = lineTop; lineBottom.points = { {100.0, 210.0}, {250.0, 210.0} }; shapes_db.push_back(lineBottom);
+    // 1. Central Concentric Circles
+    Shape innerCircle;
+    innerCircle.type = SHAPE_CIRCLE;
+    innerCircle.layer = 2; // Obrys
+    innerCircle.style = STYLE_CONTINUOUS;
+    innerCircle.color = COLOR_DEFAULT;
+    innerCircle.thickness = 0.50;
+    innerCircle.points = { {cx, cy} };
+    innerCircle.value1 = 22.19 * scale; // Radius for diameter 44.38
+    shapes_db.push_back(innerCircle);
 
-    Shape arcLeft; arcLeft.type = SHAPE_ARC; arcLeft.layer = 2; arcLeft.style = STYLE_CONTINUOUS; arcLeft.color = COLOR_BLUE; arcLeft.thickness = 0.50;
-    arcLeft.points = { {100.0, 180.0} }; arcLeft.value1 = 30.0; arcLeft.value2 = 90.0; arcLeft.value3 = 270.0; shapes_db.push_back(arcLeft);
+    Shape outerCircle = innerCircle;
+    outerCircle.value1 = 32.6 * scale; // Radius 32.6
+    shapes_db.push_back(outerCircle);
 
-    Shape arcRight = arcLeft; arcRight.points = { {250.0, 180.0} }; arcRight.value2 = 270.0; arcRight.value3 = 90.0; shapes_db.push_back(arcRight);
+    // 2. Main Outer Flange Outline Tracing
+    Shape rightPlate;
+    rightPlate.type = SHAPE_POLYLINE;
+    rightPlate.layer = 2;
+    rightPlate.style = STYLE_CONTINUOUS;
+    rightPlate.color = COLOR_DEFAULT;
+    rightPlate.thickness = 0.50;
+    rightPlate.points = {
+        {450.0, 120.0}, // Top right corner
+        {450.0, 460.0}, // Bottom right corner
+        {350.0, 460.0}, // Bottom left face transition
+        {350.0, 440.0}
+    };
+    shapes_db.push_back(rightPlate);
 
-    Shape circleLeft; circleLeft.type = SHAPE_CIRCLE; circleLeft.layer = 2; circleLeft.style = STYLE_CONTINUOUS; circleLeft.color = COLOR_BLUE; circleLeft.thickness = 0.50;
-    circleLeft.points = { {100.0, 180.0} }; circleLeft.value1 = 10.0; shapes_db.push_back(circleLeft);
+    Shape topEar;
+    topEar.type = SHAPE_POLYLINE;
+    topEar.layer = 2;
+    topEar.style = STYLE_CONTINUOUS;
+    topEar.color = COLOR_DEFAULT;
+    topEar.thickness = 0.50;
+    topEar.points = {
+        {450.0, 120.0},
+        {390.0, 120.0},
+        {390.0, 200.0}
+    };
+    shapes_db.push_back(topEar);
 
-    Shape circleRight = circleLeft; circleRight.points = { {250.0, 180.0} }; shapes_db.push_back(circleRight);
+    // 3. Slanted Left Ear Plate Outer Contour
+    Shape leftSlantedContour;
+    leftSlantedContour.type = SHAPE_POLYLINE;
+    leftSlantedContour.layer = 2;
+    leftSlantedContour.style = STYLE_CONTINUOUS;
+    leftSlantedContour.color = COLOR_DEFAULT;
+    leftSlantedContour.thickness = 0.50;
+    leftSlantedContour.points = {
+        {230.0, 230.0},
+        {180.0, 210.0},
+        {150.0, 340.0},
+        {210.0, 370.0}
+    };
+    shapes_db.push_back(leftSlantedContour);
 
-    Shape dimH; dimH.type = SHAPE_DIMENSION; dimH.layer = 1; dimH.style = STYLE_CONTINUOUS; dimH.color = COLOR_DEFAULT;
-    dimH.points = { {100.0, 110.0}, {250.0, 110.0} }; dimH.text = "50.00"; shapes_db.push_back(dimH);
+    // 4. Ear Holes (O10)
+    Shape topHole;
+    topHole.type = SHAPE_CIRCLE;
+    topHole.layer = 2;
+    topHole.style = STYLE_CONTINUOUS;
+    topHole.color = COLOR_DEFAULT;
+    topHole.thickness = 0.50;
+    topHole.points = { {420.0, 160.0} }; // Top ear hole
+    topHole.value1 = 5.0 * scale; // Radius 5
+    shapes_db.push_back(topHole);
 
-    Shape dimV; dimV.type = SHAPE_DIMENSION; dimV.layer = 1; dimV.style = STYLE_CONTINUOUS; dimV.color = COLOR_DEFAULT;
-    dimV.points = { {60.0, 150.0}, {60.0, 210.0} }; dimV.text = "20.00"; shapes_db.push_back(dimV);
+    Shape leftHole1 = topHole;
+    leftHole1.points = { {190.0, 260.0} }; // Left ear top hole
+    shapes_db.push_back(leftHole1);
 
-    Shape textLeft; textLeft.type = SHAPE_TEXT; textLeft.layer = 1; textLeft.points = { {80.0, 175.0} }; textLeft.value1 = 12.0; textLeft.text = "O20.00"; shapes_db.push_back(textLeft);
-    Shape textRight = textLeft; textRight.points = { {230.0, 175.0} }; shapes_db.push_back(textRight);
+    Shape leftHole2 = topHole;
+    leftHole2.points = { {175.0, 310.0} }; // Left ear bottom hole
+    shapes_db.push_back(leftHole2);
 
-    Shape centerLine; centerLine.type = SHAPE_LINE; centerLine.layer = 1; centerLine.style = STYLE_CENTER; centerLine.color = COLOR_DEFAULT;
-    centerLine.points = { {80.0, 180.0}, {270.0, 180.0} }; shapes_db.push_back(centerLine);
+    // 5. Construction Centerlines (Dashed)
+    Shape axisH;
+    axisH.type = SHAPE_LINE;
+    axisH.layer = 0;
+    axisH.style = STYLE_DASHED;
+    axisH.color = COLOR_DEFAULT;
+    axisH.thickness = 0.25;
+    axisH.is_construction = true;
+    axisH.points = { {100.0, cy}, {500.0, cy} };
+    shapes_db.push_back(axisH);
+
+    Shape axisV = axisH;
+    axisV.points = { {cx, 100.0}, {cx, 500.0} };
+    shapes_db.push_back(axisV);
+
+    Shape topHoleV = axisH;
+    topHoleV.points = { {420.0, 100.0}, {420.0, 220.0} };
+    shapes_db.push_back(topHoleV);
+
+    Shape leftEarCenterline = axisH;
+    leftEarCenterline.points = { {195.0, 240.0}, {170.0, 330.0} };
+    shapes_db.push_back(leftEarCenterline);
+
+    // 6. Fillets & Annotations
+    Shape r5Text;
+    r5Text.type = SHAPE_TEXT;
+    r5Text.layer = 1; // Wymiary
+    r5Text.points = { {370.0, 135.0} };
+    r5Text.value1 = 10.0;
+    r5Text.text = "R5";
+    shapes_db.push_back(r5Text);
+
+    Shape r5Text2 = r5Text; r5Text2.points = { {425.0, 105.0} }; shapes_db.push_back(r5Text2);
+    Shape r5Text3 = r5Text; r5Text3.points = { {360.0, 435.0} }; shapes_db.push_back(r5Text3);
+    Shape r5Text4 = r5Text; r5Text4.points = { {425.0, 435.0} }; shapes_db.push_back(r5Text4);
+
+    // 7. Blueprint Dimension Lines (matching technical specifications)
+    Shape dimTopWidth;
+    dimTopWidth.type = SHAPE_DIMENSION;
+    dimTopWidth.layer = 1;
+    dimTopWidth.style = STYLE_CONTINUOUS;
+    dimTopWidth.color = COLOR_DEFAULT;
+    dimTopWidth.points = { {190.0, 75.0}, {450.0, 75.0} };
+    dimTopWidth.text = "70.18";
+    shapes_db.push_back(dimTopWidth);
+
+    Shape dimTopTab;
+    dimTopTab.type = SHAPE_DIMENSION;
+    dimTopTab.layer = 1;
+    dimTopTab.style = STYLE_CONTINUOUS;
+    dimTopTab.color = COLOR_DEFAULT;
+    dimTopTab.points = { {390.0, 95.0}, {450.0, 95.0} };
+    dimTopTab.text = "29.39";
+    shapes_db.push_back(dimTopTab);
+
+    Shape dimHoleOffset;
+    dimHoleOffset.type = SHAPE_DIMENSION;
+    dimHoleOffset.layer = 1;
+    dimHoleOffset.style = STYLE_CONTINUOUS;
+    dimHoleOffset.color = COLOR_DEFAULT;
+    dimHoleOffset.points = { {420.0, 110.0}, {450.0, 110.0} };
+    dimHoleOffset.text = "14.69";
+    shapes_db.push_back(dimHoleOffset);
+
+    Shape dimTotalHeight;
+    dimTotalHeight.type = SHAPE_DIMENSION;
+    dimTotalHeight.layer = 1;
+    dimTotalHeight.style = STYLE_CONTINUOUS;
+    dimTotalHeight.color = COLOR_DEFAULT;
+    dimTotalHeight.points = { {480.0, 120.0}, {480.0, 460.0} };
+    dimTotalHeight.text = "94.07";
+    shapes_db.push_back(dimTotalHeight);
+
+    Shape dimCenterHeight;
+    dimCenterHeight.type = SHAPE_DIMENSION;
+    dimCenterHeight.layer = 1;
+    dimCenterHeight.style = STYLE_CONTINUOUS;
+    dimCenterHeight.color = COLOR_DEFAULT;
+    dimCenterHeight.points = { {480.0, 320.0}, {480.0, 460.0} };
+    dimCenterHeight.text = "41.65";
+    shapes_db.push_back(dimCenterHeight);
+
+    Shape dimBottomTab;
+    dimBottomTab.type = SHAPE_DIMENSION;
+    dimBottomTab.layer = 1;
+    dimBottomTab.style = STYLE_CONTINUOUS;
+    dimBottomTab.color = COLOR_DEFAULT;
+    dimBottomTab.points = { {350.0, 485.0}, {450.0, 485.0} };
+    dimBottomTab.text = "42.85";
+    shapes_db.push_back(dimBottomTab);
+
+    Shape dimTotalBottom;
+    dimTotalBottom.type = SHAPE_DIMENSION;
+    dimTotalBottom.layer = 1;
+    dimTotalBottom.style = STYLE_CONTINUOUS;
+    dimTotalBottom.color = COLOR_DEFAULT;
+    dimTotalBottom.points = { {180.0, 510.0}, {450.0, 510.0} };
+    dimTotalBottom.text = "75.45";
+    shapes_db.push_back(dimTotalBottom);
+
+    Shape dimInnerDiam;
+    dimInnerDiam.type = SHAPE_DIMENSION;
+    dimInnerDiam.layer = 1;
+    dimInnerDiam.style = STYLE_CONTINUOUS;
+    dimInnerDiam.color = COLOR_DEFAULT;
+    dimInnerDiam.points = { {cx, cy}, {cx + 22.19 * scale, cy} };
+    dimInnerDiam.text = "O44.38";
+    shapes_db.push_back(dimInnerDiam);
+
+    Shape dimOuterRad;
+    dimOuterRad.type = SHAPE_DIMENSION;
+    dimOuterRad.layer = 1;
+    dimOuterRad.style = STYLE_CONTINUOUS;
+    dimOuterRad.color = COLOR_DEFAULT;
+    dimOuterRad.points = { {cx, cy}, {cx - 32.6 * scale * 0.707, cy + 32.6 * scale * 0.707} };
+    dimOuterRad.text = "R32.6";
+    shapes_db.push_back(dimOuterRad);
 }
 
 void UpdateLayout(HWND hwnd) {
