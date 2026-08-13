@@ -772,6 +772,13 @@ void MainWindow::OnRunNesting() {
 void MainWindow::OnExportGCode() {
     if (m_sheets.empty()) return;
 
+    // Pre-NC geometry validation
+    std::string errMsg;
+    if (!NestingEngine::validateNesting(m_sheets, m_nestingParams, errMsg)) {
+        MessageBox(m_hwnd, errMsg.c_str(), "Walidacja geometrii przed generowaniem NC", MB_OK | MB_ICONERROR);
+        return;
+    }
+
     OPENFILENAME ofn;
     char szFile[260] = "program_rozkroju.nc";
 

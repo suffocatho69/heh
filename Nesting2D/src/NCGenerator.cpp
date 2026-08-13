@@ -9,83 +9,83 @@ std::string NCGenerator::generateGCode(
 ) {
     std::stringstream ss;
 
-    // Set standard double formatting
+    // Set standard double formatting with 3 decimal places
     ss << std::fixed << std::setprecision(3);
 
-    // G-code Header
-    ss << "; =========================================================\n";
-    ss << "; RETRO 2D NESTING G-CODE GENERATOR\n";
-    ss << "; Generated G-code for " << sheets.size() << " plates/sheets\n";
-    ss << "; =========================================================\n";
-    ss << "G21 ; Set units to millimeters\n";
-    ss << "G90 ; Absolute coordinates positioning\n";
-    ss << "G17 ; XY Plane selection\n";
-    ss << "G00 Z" << params.safeZ << " ; Lift cutter to safe Z clearance height\n";
-    ss << "M03 S" << (int)params.spindleSpeed << " ; Start spindle clockwise at " << (int)params.spindleSpeed << " RPM\n\n";
+    // Seron Osai specific comments and setup
+    ss << ";POSTPROCESOR DLA PLOTERA FREZUJACEGO SERON Z STEROWANIEM OSAI\n";
+    ss << ";ZESPOL RETRO NESTINGATOR3000\n";
+    ss << ";LICZBA PLYT: " << sheets.size() << "\n";
+    ss << "G27\n";
+    ss << "G90\n";
+    ss << "G17\n";
+
+    // Tool definition and spindle start
+    ss << "T20.20 M06\n";
+    ss << "S" << (int)params.spindleSpeed << " M03\n";
+    ss << "(UAO,2)\n\n";
 
     int sheetCounter = 1;
     for (const auto& sheet : sheets) {
-        ss << "; ---------------------------------------------------------\n";
-        ss << "; PLATE / SHEET " << sheetCounter << " (Size: " << sheet.width << "x" << sheet.height << " mm)\n";
-        ss << "; ---------------------------------------------------------\n";
+        ss << ";KONTUR PLYTY #" << sheetCounter << " (" << (int)sheet.width << "x" << (int)sheet.height << ")\n";
 
         if (sheet.placedComponents.empty()) {
-            ss << "; (This sheet has no nested components)\n\n";
+            ss << "; (Pusta plyta)\n\n";
             sheetCounter++;
             continue;
         }
 
         for (const auto& comp : sheet.placedComponents) {
-            ss << "\n; Part: " << comp.name << " placed at (" << comp.posX << ", " << comp.posY
-               << ") Rotated=" << (comp.rotated ? "YES" : "NO") << "\n";
+            ss << ";DETAL: " << comp.name << " POS: (" << comp.posX << "," << comp.posY << ") OBR: " << (comp.rotated ? "90" : "0") << "\n";
+
+            Point currentPos;
+            bool isPlunged = false;
 
             for (const auto& geo : comp.geometry) {
                 if (geo.type == GeoEntity::LINE) {
-                    // Translate local line endpoints to global coordinates
-                    auto startPt = comp.localToGlobal(geo.x1, geo.y1);
-                    auto endPt = comp.localToGlobal(geo.x2, geo.y2);
+                    auto p1 = comp.localToGlobal(geo.x1, geo.y1);
+                    auto p2 = comp.localToGlobal(geo.x2, geo.y2);
 
-                    // 1. Rapid move to start point (above stock)
-                    ss << "G00 X" << startPt.first << " Y" << startPt.second << "\n";
+                    Point startPt(p1.first, p1.second);
+                    Point endPt(p2.first, p2.second);
 
-                    // 2. Plunge down into stock
-                    ss << "G01 Z" << params.cutDepth << " F" << params.plungeFeed << "\n";
-
-                    // 3. Cut to end point
-                    ss << "G01 X" << endPt.first << " Y" << endPt.second << " F" << params.cuttingFeed << "\n";
-
-                    // 4. Retract back to safety height
-                    ss << "G00 Z" << params.safeZ << "\n";
-
+                    if (isPlunged && std::abs(currentPos.x - startPt.x) < 0.1 && std::abs(currentPos.y - startPt.y) < 0.1) {
+                        // Continuous path cutting without lift
+                        ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << params.cutDepth << " F" << (int)params.cuttingFeed << ".\n";
+                    } else {
+                        if (isPlunged) {
+                            ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                            isPlunged = false;
+                        }
+                        ss << "G00 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << "\n";
+                        ss << "G94 G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                        ss << "G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
+                        ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << params.cutDepth << " F" << (int)params.cuttingFeed << ".\n";
+                        isPlunged = true;
+                    }
+                    currentPos = endPt;
                 } else if (geo.type == GeoEntity::CIRCLE) {
-                    // Circle around center (geo.x1, geo.y1)
+                    if (isPlunged) {
+                        ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                        isPlunged = false;
+                    }
                     auto centerPt = comp.localToGlobal(geo.x1, geo.y1);
                     double r = geo.radius;
-
-                    // Start cut at (centerX + radius, centerY)
                     double startX = centerPt.first + r;
                     double startY = centerPt.second;
 
-                    // 1. Rapid to start
-                    ss << "G00 X" << startX << " Y" << startY << "\n";
-
-                    // 2. Plunge depth
-                    ss << "G01 Z" << params.cutDepth << " F" << params.plungeFeed << "\n";
-
-                    // 3. Cut full circle clockwise (G02)
-                    // In relative center offsets: I = -r (center lies -r along X), J = 0
-                    ss << "G02 X" << startX << " Y" << startY << " I" << -r << " J0.000 F" << params.cuttingFeed << "\n";
-
-                    // 4. Retract
-                    ss << "G00 Z" << params.safeZ << "\n";
-
+                    ss << "G00 X" << startX << " Y" << startY << " Z" << params.safeZ << "\n";
+                    ss << "G94 G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    ss << "G01 X" << startX << " Y" << startY << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
+                    ss << "G02 X" << startX << " Y" << startY << " I" << -r << " J0.000 F" << (int)params.cuttingFeed << ".\n";
+                    ss << "G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    currentPos = Point(startX, startY);
                 } else if (geo.type == GeoEntity::ARC) {
-                    // Arc: Center (geo.x1, geo.y1), radius, start_angle, end_angle
+                    if (isPlunged) {
+                        ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                        isPlunged = false;
+                    }
                     double r = geo.radius;
-
-                    // Local start and end points on arc
-                    // In a rotated component, we must also rotate the start/end angles or just rotate local positions!
-                    // Let's compute local endpoints first, and then translate them globally:
                     double sa_rad = geo.start_angle * M_PI / 180.0;
                     double ea_rad = geo.end_angle * M_PI / 180.0;
 
@@ -98,33 +98,30 @@ std::string NCGenerator::generateGCode(
                     auto endPt = comp.localToGlobal(localEndX, localEndY);
                     auto globalCenterPt = comp.localToGlobal(geo.x1, geo.y1);
 
-                    // Relative offsets to center
                     double i_offset = globalCenterPt.first - startPt.first;
                     double j_offset = globalCenterPt.second - startPt.second;
 
-                    // 1. Rapid to start
-                    ss << "G00 X" << startPt.first << " Y" << startPt.second << "\n";
+                    ss << "G00 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << "\n";
+                    ss << "G94 G01 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    ss << "G01 X" << startPt.first << " Y" << startPt.second << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
 
-                    // 2. Plunge down
-                    ss << "G01 Z" << params.cutDepth << " F" << params.plungeFeed << "\n";
+                    // Arc direction dynamically outputs G02 or G03 CCW/CW
+                    ss << (geo.ccw ? "G03" : "G02") << " X" << endPt.first << " Y" << endPt.second
+                       << " I" << i_offset << " J" << j_offset << " F" << (int)params.cuttingFeed << ".\n";
 
-                    // 3. Cut arc. Determine direction: CCW (G03) or CW (G02)
-                    ss << "G03 X" << endPt.first << " Y" << endPt.second
-                       << " I" << i_offset << " J" << j_offset << " F" << params.cuttingFeed << "\n";
-
-                    // 4. Retract
-                    ss << "G00 Z" << params.safeZ << "\n";
+                    ss << "G01 X" << endPt.first << " Y" << endPt.second << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    currentPos = Point(endPt.first, endPt.second);
                 }
+            }
+            if (isPlunged) {
+                ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
             }
         }
         sheetCounter++;
     }
 
-    // G-code Footer
-    ss << "\n; End of programs and shutdown commands\n";
-    ss << "M05 ; Turn off spindle motor\n";
-    ss << "G00 X0.000 Y0.000 ; Return home\n";
-    ss << "M30 ; Program end and reset\n";
+    // G-code End commands matching Seron Osai specifications exactly
+    ss << "\nM05\nM30\n";
 
     return ss.str();
 }

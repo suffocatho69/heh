@@ -33,6 +33,25 @@ public:
         const NestingParams& params
     );
 
+    // Runs pre-NC validation of nested sheet layouts, checking for collisions, overlaps, out-of-bounds, self-intersections, and closure.
+    static bool validateNesting(
+        const std::vector<SheetLayout>& sheets,
+        const NestingParams& params,
+        std::string& outErrorMessage
+    );
+
+    // Checks if two components collide, accounting for true geometry contours and technology spacing
+    static bool checkCollision(const Component& comp1, const Component& comp2, double spacing);
+
+    // Ray-casting point-in-polygon helper
+    static bool isPointInPolygon(Point p, const std::vector<Point>& poly);
+
+    // Minimum distance from point to segment
+    static double pointToSegmentDistance(Point p, Point s1, Point s2);
+
+    // Minimum distance between two segments
+    static double segmentToSegmentDistance(Point p1, Point p2, Point q1, Point q2);
+
 private:
     // Checks if a component can be placed at (x, y) on the sheet with specific dimensions
     static bool canPlaceComponent(

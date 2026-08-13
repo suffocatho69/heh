@@ -12,9 +12,9 @@ Kod źródłowy został podzielony na logiczne, czytelne komponenty:
 1. **`Component`**: Reprezentuje wczytany detal rozkroju, jego parametry geometryczne (wymiary X/Y, ilość sztuk, wektor geometrii linii, okręgów i łuków) oraz helpery do rotacji.
 2. **`DXFReader`**: Szybki, bezbłędny parser formatu plików DXF, wyciągający jednostki geometryczne (`LINE`, `ARC`, `CIRCLE`) i automatycznie normalizujący ich współrzędne do układu lokalnego `(0,0)` oraz kalkulujący optymalną obwiednię (bounding box).
 3. **`NestingEngine`**: Główny silnik rozkroju. Implementuje pakowanie 2D strategią **Best-Fit Descending** (sortowanie po polu powierzchni malejąco) oraz algorytm bottom-left scanning z obsługą rotacji o 90 stopni, marginesów arkusza i odstępów part-to-part.
-4. **`NCGenerator`**: Tłumaczy ułożone detale na standardowy, przemysłowy **G-kod (ISO RS-274)**, sterując obrotami wrzeciona, posuwem roboczym, posuwem wejścia w materiał, wysokością przejazdu bezpiecznego (Z) oraz głębokością frezowania.
+4. **`NCGenerator`**: Tłumaczy ułożone detale na profesjonalny, przemysłowy **G-kod zoptymalizowany pod ploter frezujący Seron ze sterowaniem Osai** (obsługuje instrukcje wstępne `G27`, `G90`, `G17`, automatyczną wymianę narzędzia `T20.20 M06`, bazowanie `(UAO,2)`, szybkie wyjazdy i retracty `G01 Z<safeZ> F<cuttingFeed>` dla szybkiego przechodzenia do kolejnego detalu, oraz końcowy blok `M05/M30`).
 5. **`ComponentManager`**: Odpowiada za zarządzanie listą detali, dodawanie, usuwanie i dokładne wyliczanie statystyk wykorzystania materiału.
-6. **`MainWindow`**: Czyste okienkowe Win32 API o logicznym układzie trzech paneli (Lista detali, parametry wejściowe płyty i maszynowe, retro podgląd graficzny GDI oraz statystyki).
+6. **`MainWindow`**: Czyste okienkowe Win32 API o logicznym, pięknym układzie retro "Nestingator3000" z dwiema bazami po lewej stronie ("BAZA DETALI" i "Komponenty") oraz panelami podglądu i parametrów po prawej stronie.
 
 ---
 
@@ -25,6 +25,7 @@ Nesting2D/
 ├── Nesting2D.dev       <- Plik projektu dla środowiska Dev-C++ 5.11
 ├── Makefile            <- Uniwersalny plik Makefile (Linux i MinGW GCC)
 ├── README.md           <- Niniejsza instrukcja użytkownika (Polish)
+├── zrzut_ekranu.png    <- Zrzut ekranu z działania programu Nestingator3000
 ├── test_main.cpp       <- Testy jednostkowe CLI uruchamiane na Linuksie / konsoli
 └── src/
     ├── Component.h / .cpp

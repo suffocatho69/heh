@@ -1,42 +1,45 @@
 #include <iostream>
 #include <cassert>
 #include <string>
+#include <cmath>
+#include <algorithm>
 #include "src/Component.h"
 #include "src/DXFReader.h"
 #include "src/NestingEngine.h"
 #include "src/ComponentManager.h"
 #include "src/NCGenerator.h"
 
+// Tolerance helper for doubles
+inline bool is_close(double a, double b, double tol = 1e-3) {
+    return std::abs(a - b) < tol;
+}
+
 void runComponentTests() {
     std::cout << "[TEST] Running Component class tests...\n";
 
-    // Create an unrotated component
     Component comp1("PartA", 100.0, 50.0, 2);
     assert(comp1.name == "PartA");
     assert(comp1.width == 100.0);
     assert(comp1.height == 50.0);
     assert(comp1.quantity == 2);
-    assert(comp1.getEffectiveWidth() == 100.0);
-    assert(comp1.getEffectiveHeight() == 50.0);
+    assert(is_close(comp1.getEffectiveWidth(), 100.0));
+    assert(is_close(comp1.getEffectiveHeight(), 50.0));
 
     // Translate coordinates
     comp1.posX = 10.0;
     comp1.posY = 20.0;
     auto globalPt = comp1.localToGlobal(10.0, 5.0);
-    assert(globalPt.first == 20.0);
-    assert(globalPt.second == 25.0);
+    assert(is_close(globalPt.first, 20.0));
+    assert(is_close(globalPt.second, 25.0));
 
     // Test with rotation
     comp1.rotated = true;
-    assert(comp1.getEffectiveWidth() == 50.0);
-    assert(comp1.getEffectiveHeight() == 100.0);
+    assert(is_close(comp1.getEffectiveWidth(), 50.0));
+    assert(is_close(comp1.getEffectiveHeight(), 100.0));
 
-    // rotated: height (50.0) - ly, posX + height - ly, posY + lx
-    globalPt = comp1.localToGlobal(10.0, 5.0); // lx=10, ly=5
-    // height - ly = 50 - 5 = 45; posX + 45 = 10 + 45 = 55
-    // posY + lx = 20 + 10 = 30
-    assert(globalPt.first == 55.0);
-    assert(globalPt.second == 30.0);
+    globalPt = comp1.localToGlobal(10.0, 5.0);
+    assert(is_close(globalPt.first, 55.0));
+    assert(is_close(globalPt.second, 30.0));
 
     std::cout << "[TEST] Component tests passed successfully!\n";
 }
@@ -44,7 +47,6 @@ void runComponentTests() {
 void runDXFReaderTests() {
     std::cout << "[TEST] Running DXFReader mock tests...\n";
 
-    // Standard simplified mock DXF content representing a square from (10, 10) to (110, 110)
     std::string mockDXF =
         "0\nSECTION\n"
         "2\nENTITIES\n"
@@ -65,23 +67,336 @@ void runDXFReaderTests() {
     assert(comp.height == 100.0);
     assert(comp.geometry.size() == 4);
 
-    // First line should be mapped from [0, 0] to [100, 0] since [10, 10] was minimum bounds
-    assert(comp.geometry[0].x1 == 0.0);
-    assert(comp.geometry[0].y1 == 0.0);
-    assert(comp.geometry[0].x2 == 100.0);
-    assert(comp.geometry[0].y2 == 0.0);
+    assert(is_close(comp.geometry[0].x1, 0.0));
+    assert(is_close(comp.geometry[0].y1, 0.0));
+    assert(is_close(comp.geometry[0].x2, 100.0));
+    assert(is_close(comp.geometry[0].y2, 0.0));
 
     std::cout << "[TEST] DXFReader tests passed successfully!\n";
+}
+
+// ============================================================================
+// 11 REGRESSION TESTS (Polish requirements 15)
+// ============================================================================
+
+void runRegressionTests() {
+    std::cout << "\n=========================================================\n";
+    std::cout << "  RUNNING 11 REGRESSION TESTS\n";
+    std::cout << "=========================================================\n";
+
+    // --- TEST 1: Rectangle 100x50 ---
+    {
+        std::cout << "[REG_TEST 1] Prosty prostokat 100x50... ";
+        Component rect("Prostokat", 100.0, 50.0);
+        assert(is_close(rect.width, 100.0));
+        assert(is_close(rect.height, 50.0));
+        assert(rect.outerContour.size() >= 4);
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 2: Two Rectangles (spacing) ---
+    {
+        std::cout << "[REG_TEST 2] Dwa prostokaty i ich odstep technologiczny... ";
+        Component r1("R1", 100.0, 50.0);
+        r1.posX = 10.0; r1.posY = 10.0;
+
+        Component r2("R2", 100.0, 50.0);
+        // Positioned at X = 113 (Spacing is 5, distance is 3mm, which collides!)
+        r2.posX = 113.0; r2.posY = 10.0;
+
+        bool collides = NestingEngine::checkCollision(r1, r2, 5.0);
+        assert(collides == true); // Should collide since spacing is 5 and distance is 3
+
+        // Move r2 to X = 115 (exactly 5mm spacing)
+        r2.posX = 115.0;
+        collides = NestingEngine::checkCollision(r1, r2, 5.0);
+        assert(collides == false); // No collision now!
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 3: L-shape actual geometry nesting vs bounding box ---
+    {
+        std::cout << "[REG_TEST 3] Detal L-shape (prawdziwa geometria vs BB)... ";
+        Component lshape;
+        lshape.name = "L-shape";
+        lshape.width = 100.0;
+        lshape.height = 100.0;
+
+        // Define L-shape: 100x100 with cutout of 50x50 at top right
+        // Contour vertices: (0,0) -> (100,0) -> (100,50) -> (50,50) -> (50,100) -> (0,100) -> (0,0)
+        GeoEntity g1, g2, g3, g4, g5, g6;
+        g1.type = GeoEntity::LINE; g1.x1 = 0; g1.y1 = 0; g1.x2 = 100; g1.y2 = 0;
+        g2.type = GeoEntity::LINE; g2.x1 = 100; g2.y1 = 0; g2.x2 = 100; g2.y2 = 50;
+        g3.type = GeoEntity::LINE; g3.x1 = 100; g3.y1 = 50; g3.x2 = 50; g3.y2 = 50;
+        g4.type = GeoEntity::LINE; g4.x1 = 50; g4.y1 = 50; g4.x2 = 50; g4.y2 = 100;
+        g5.type = GeoEntity::LINE; g5.x1 = 50; g5.y1 = 100; g5.x2 = 0; g5.y2 = 100;
+        g6.type = GeoEntity::LINE; g6.x1 = 0; g6.y1 = 100; g6.x2 = 0; g6.y2 = 0;
+
+        lshape.geometry = {g1, g2, g3, g4, g5, g6};
+        lshape.buildContours(0.1);
+        lshape.posX = 10; lshape.posY = 10;
+
+        Component small_part("Small", 40.0, 40.0);
+        // Small part is placed at (60, 60), which is completely inside the 50x50 cutout
+        small_part.posX = 70.0; small_part.posY = 70.0;
+
+        // Bounding boxes definitely overlap!
+        bool bb_overlap = !(lshape.posX + lshape.getEffectiveWidth() <= small_part.posX ||
+                            small_part.posX + small_part.getEffectiveWidth() <= lshape.posX ||
+                            lshape.posY + lshape.getEffectiveHeight() <= small_part.posY ||
+                            small_part.posY + small_part.getEffectiveHeight() <= lshape.posY);
+        assert(bb_overlap == true);
+
+        // But actual geometry does NOT collide!
+        bool real_collision = NestingEngine::checkCollision(lshape, small_part, 2.0);
+        assert(real_collision == false);
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 4: Circle ---
+    {
+        std::cout << "[REG_TEST 4] Weryfikacja okregu CIRCLE... ";
+        Component circ;
+        circ.name = "Kolo";
+        GeoEntity g;
+        g.type = GeoEntity::CIRCLE;
+        g.x1 = 50.0; g.y1 = 50.0; g.radius = 30.0;
+        circ.geometry.push_back(g);
+        circ.buildContours(0.1);
+
+        // Bounding box should be 60x60
+        assert(is_close(circ.getEffectiveWidth(), 60.0));
+        assert(is_close(circ.getEffectiveHeight(), 60.0));
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 5: Arc 90° G02/G03 ---
+    {
+        std::cout << "[REG_TEST 5] Luk 90 stopni i generowanie G02/G03... ";
+        Component arc;
+        arc.name = "Luk90";
+        GeoEntity g;
+        g.type = GeoEntity::ARC;
+        g.x1 = 0; g.y1 = 0; g.radius = 50.0;
+        g.start_angle = 0; g.end_angle = 90; g.ccw = true;
+        arc.geometry.push_back(g);
+        arc.buildContours(0.1);
+
+        SheetLayout sheet;
+        sheet.width = 1000; sheet.height = 1000;
+        arc.posX = 10; arc.posY = 10;
+        sheet.placedComponents.push_back(arc);
+
+        NCParams nc;
+        std::string gcode = NCGenerator::generateGCode({sheet}, nc);
+        assert(gcode.find("G03") != std::string::npos); // CCW arc should output G03
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 6: Arc 180° direction ---
+    {
+        std::cout << "[REG_TEST 6] Luk 180 stopni CCW vs CW... ";
+        Component arc_cw;
+        arc_cw.name = "Luk180_CW";
+        GeoEntity g;
+        g.type = GeoEntity::ARC;
+        g.x1 = 0; g.y1 = 0; g.radius = 50.0;
+        g.start_angle = 0; g.end_angle = 180; g.ccw = false; // Clockwise
+        arc_cw.geometry.push_back(g);
+        arc_cw.buildContours(0.1);
+
+        SheetLayout sheet;
+        sheet.width = 1000; sheet.height = 1000;
+        arc_cw.posX = 10; arc_cw.posY = 10;
+        sheet.placedComponents.push_back(arc_cw);
+
+        NCParams nc;
+        std::string gcode = NCGenerator::generateGCode({sheet}, nc);
+        assert(gcode.find("G02") != std::string::npos); // Clockwise arc must output G02
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 7: Arc > 180° ---
+    {
+        std::cout << "[REG_TEST 7] Luk powyzej 180 stopni z bulge > 1... ";
+        std::string mockPolyDXF =
+            "0\nSECTION\n"
+            "2\nENTITIES\n"
+            "0\nLWPOLYLINE\n"
+            "70\n0\n" // Open
+            "10\n0.0\n20\n0.0\n42\n1.5\n" // Vertex 1 with bulge 1.5 (> 180 degrees CCW)
+            "10\n100.0\n20\n0.0\n42\n0.0\n"
+            "0\nEOF\n";
+
+        Component comp;
+        bool success = DXFReader::loadDXFFromString(mockPolyDXF, comp);
+        assert(success == true);
+        assert(comp.geometry.size() == 1);
+        assert(comp.geometry[0].type == GeoEntity::ARC);
+        assert(comp.geometry[0].ccw == true);
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 8: Closed LWPOLYLINE with bulge ---
+    {
+        std::cout << "[REG_TEST 8] Zamknieta LWPOLYLINE z bulge... ";
+        std::string mockPolyDXF =
+            "0\nSECTION\n"
+            "2\nENTITIES\n"
+            "0\nLWPOLYLINE\n"
+            "70\n1\n" // Closed
+            "10\n0.0\n20\n0.0\n42\n0.5\n" // Vertex 1 with bulge
+            "10\n100.0\n20\n0.0\n42\n0.0\n"
+            "10\n100.0\n20\n100.0\n42\n0.0\n"
+            "10\n0.0\n20\n100.0\n42\n0.0\n"
+            "0\nEOF\n";
+
+        Component comp;
+        bool success = DXFReader::loadDXFFromString(mockPolyDXF, comp);
+        assert(success == true);
+        assert(comp.geometry.size() >= 4);
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 9: Rotation 90° ---
+    {
+        std::cout << "[REG_TEST 9] Obrot o 90 stopni i re-kalkulacja bounds... ";
+        Component comp("Part", 100.0, 40.0);
+        comp.rotationAngle = 90.0;
+
+        // Bounding box size should swap
+        assert(is_close(comp.getEffectiveWidth(), 40.0));
+        assert(is_close(comp.getEffectiveHeight(), 100.0));
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 10: Spacing 5 mm ---
+    {
+        std::cout << "[REG_TEST 10] Rzeczywisty odstep 5 mm... ";
+        Component r1("R1", 100.0, 50.0);
+        r1.posX = 10.0; r1.posY = 10.0;
+
+        Component r2("R2", 100.0, 50.0);
+        r2.posX = 114.9; r2.posY = 10.0; // 4.9mm distance
+
+        bool collides = NestingEngine::checkCollision(r1, r2, 5.0);
+        assert(collides == true); // Should collide since spacing is 5
+
+        r2.posX = 115.1;
+        collides = NestingEngine::checkCollision(r1, r2, 5.0);
+        assert(collides == false); // Safe at 5.1mm
+        std::cout << "PASSED\n";
+    }
+
+    // --- TEST 11: Part fitting in recess (U-shape nesting) ---
+    {
+        std::cout << "[REG_TEST 11] Umieszczanie elementu w zaglebieniu (recess)... ";
+        // Create large U-shape cavity
+        Component ushape;
+        ushape.width = 150.0; ushape.height = 100.0;
+
+        // Define cavity points forming U-shape
+        GeoEntity g1, g2, g3, g4, g5, g6, g7, g8;
+        g1.type = GeoEntity::LINE; g1.x1 = 0; g1.y1 = 0; g1.x2 = 150; g1.y2 = 0;
+        g2.type = GeoEntity::LINE; g2.x1 = 150; g2.y1 = 0; g2.x2 = 150; g2.y2 = 100;
+        g3.type = GeoEntity::LINE; g3.x1 = 150; g3.y1 = 100; g3.x2 = 110; g3.y2 = 100;
+        g4.type = GeoEntity::LINE; g4.x1 = 110; g4.y1 = 100; g4.x2 = 110; g4.y2 = 40;
+        g5.type = GeoEntity::LINE; g5.x1 = 110; g5.y1 = 40; g5.x2 = 40; g5.y2 = 40;
+        g6.type = GeoEntity::LINE; g6.x1 = 40; g6.y1 = 40; g6.x2 = 40; g6.y2 = 100;
+        g7.type = GeoEntity::LINE; g7.x1 = 40; g7.y1 = 100; g7.x2 = 0; g7.y2 = 100;
+        g8.type = GeoEntity::LINE; g8.x1 = 0; g8.y1 = 100; g8.x2 = 0; g8.y2 = 0;
+
+        ushape.geometry = {g1, g2, g3, g4, g5, g6, g7, g8};
+        ushape.buildContours(0.1);
+        ushape.posX = 10; ushape.posY = 10;
+
+        Component key("Key", 50.0, 40.0);
+        // Place key inside the U-shape cavity hollow
+        key.posX = 60.0; key.posY = 55.0;
+
+        // Verify bounding boxes definitely overlap!
+        bool bb_overlap = !(ushape.posX + ushape.getEffectiveWidth() <= key.posX ||
+                            key.posX + key.getEffectiveWidth() <= ushape.posX ||
+                            ushape.posY + ushape.getEffectiveHeight() <= key.posY ||
+                            key.posY + key.getEffectiveHeight() <= ushape.posY);
+        assert(bb_overlap == true);
+
+        // Verify true geometry does not collide with 2mm spacing
+        bool collides = NestingEngine::checkCollision(ushape, key, 2.0);
+        assert(collides == false);
+        std::cout << "PASSED\n";
+    }
+
+    std::cout << "[SUCCESS] ALL 11 REGRESSION TESTS COMPLETED SUCCESSFULLY!\n";
+}
+
+// ============================================================================
+// END-TO-END TEST (Polish requirement 16)
+// ============================================================================
+
+void runEndToEndTest() {
+    std::cout << "\n=========================================================\n";
+    std::cout << "  RUNNING END-TO-END TEST\n";
+    std::cout << "=========================================================\n";
+
+    // 1. DXF String representing a closed contour (100x100 square)
+    std::string mockDXF =
+        "0\nSECTION\n"
+        "2\nENTITIES\n"
+        "0\nLINE\n"
+        "10\n0.0\n20\n0.0\n11\n100.0\n21\n0.0\n"
+        "0\nLINE\n"
+        "10\n100.0\n20\n0.0\n11\n100.0\n21\n100.0\n"
+        "0\nLINE\n"
+        "10\n100.0\n20\n100.0\n11\n0.0\n21\n100.0\n"
+        "0\nLINE\n"
+        "10\n0.0\n20\n100.0\n11\n0.0\n21\n0.0\n"
+        "0\nEOF\n";
+
+    // 2. Parser
+    Component comp;
+    comp.quantity = 1;
+    bool success = DXFReader::loadDXFFromString(mockDXF, comp);
+    assert(success == true);
+    assert(is_close(comp.width, 100.0));
+    assert(is_close(comp.height, 100.0));
+
+    // 3. Component & Polygon Check
+    assert(comp.outerContour.size() >= 4);
+
+    // 4. Nesting
+    std::vector<Component> parts = { comp, comp }; // 2 copies
+    NestingParams params;
+    params.sheetWidth = 1000.0;
+    params.sheetHeight = 500.0;
+    params.margin = 10.0;
+    params.spacing = 5.0;
+
+    auto sheets = NestingEngine::performNesting(parts, params);
+    assert(!sheets.empty());
+    assert(sheets[0].placedComponents.size() == 2);
+
+    // 5. NC code generation
+    NCParams nc;
+    std::string gcode = NCGenerator::generateGCode(sheets, nc);
+    assert(!gcode.empty());
+
+    // G-code must contain the specific Seron Osai commands
+    assert(gcode.find("G27") != std::string::npos);
+    assert(gcode.find("T20.20 M06") != std::string::npos);
+    assert(gcode.find("(UAO,2)") != std::string::npos);
+    assert(gcode.find("M30") != std::string::npos);
+
+    std::cout << "[SUCCESS] END-TO-END TEST PASSED SUCCESSFULLY!\n";
 }
 
 void runNestingEngineAndNCGenTests() {
     std::cout << "[TEST] Running NestingEngine & NCGenerator tests...\n";
 
     ComponentManager manager;
-    // Add multiple parts
-    manager.addComponent(Component("Part_Large", 400.0, 300.0, 4)); // total 4 units
-    manager.addComponent(Component("Part_Medium", 200.0, 150.0, 6)); // total 6 units
-    manager.addComponent(Component("Part_Small", 80.0, 80.0, 10)); // total 10 units
+    manager.addComponent(Component("Part_Large", 400.0, 300.0, 4));
+    manager.addComponent(Component("Part_Medium", 200.0, 150.0, 6));
+    manager.addComponent(Component("Part_Small", 80.0, 80.0, 10));
 
     NestingParams params;
     params.sheetWidth = 1000.0;
@@ -93,13 +408,11 @@ void runNestingEngineAndNCGenTests() {
     params.allowRot180 = false;
     params.allowRot270 = false;
 
-    // Run nesting
     auto sheets = NestingEngine::performNesting(manager.getComponents(), params);
 
     assert(!sheets.empty());
     std::cout << "[INFO] Nesting complete. Total Sheets used: " << sheets.size() << "\n";
 
-    // Print stats
     int totalUnitsExpected = 4 + 6 + 10;
     auto stats = ComponentManager::calculateStats(sheets, totalUnitsExpected);
     std::cout << "[INFO] Material Utilization: " << stats.materialUtilization << "%\n";
@@ -135,7 +448,7 @@ void runNestingEngineAndNCGenTests() {
 
     std::string gcode = NCGenerator::generateGCode(sheets, nc);
     assert(!gcode.empty());
-    assert(gcode.find("G21") != std::string::npos);
+    assert(gcode.find("G27") != std::string::npos);
     assert(gcode.find("S15000") != std::string::npos);
     assert(gcode.find("F2000") != std::string::npos);
     assert(gcode.find("Z5.000") != std::string::npos);
@@ -152,6 +465,8 @@ int main() {
     runComponentTests();
     runDXFReaderTests();
     runNestingEngineAndNCGenTests();
+    runRegressionTests();
+    runEndToEndTest();
 
     std::cout << "\n[SUCCESS] ALL UNIT TESTS COMPLETED SUCCESSFULLY!\n";
     return 0;
