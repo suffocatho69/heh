@@ -12,11 +12,16 @@ struct SheetLayout {
 };
 
 struct NestingParams {
-    double sheetWidth = 2000.0;
-    double sheetHeight = 1000.0;
+    double sheetWidth = 3000.0;
+    double sheetHeight = 1500.0;
     double margin = 10.0;       // Margin from sheet border
     double spacing = 5.0;       // Distance between adjacent components
-    bool allowRotation = true;  // If true, 90-degree rotations are permitted
+
+    // Custom checkboxes for individual rotation angles
+    bool allowRot0 = true;
+    bool allowRot90 = true;
+    bool allowRot180 = false;
+    bool allowRot270 = false;
 };
 
 class NestingEngine {

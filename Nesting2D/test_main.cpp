@@ -88,7 +88,10 @@ void runNestingEngineAndNCGenTests() {
     params.sheetHeight = 600.0;
     params.margin = 15.0;
     params.spacing = 10.0;
-    params.allowRotation = true;
+    params.allowRot0 = true;
+    params.allowRot90 = true;
+    params.allowRot180 = false;
+    params.allowRot270 = false;
 
     // Run nesting
     auto sheets = NestingEngine::performNesting(manager.getComponents(), params);

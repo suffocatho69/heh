@@ -46,41 +46,59 @@ private:
     // Refresh ListView with the current components
     void RefreshListView();
 
-    // Refresh layout listbox/combobox based on sheets
-    void RefreshLayoutSelector();
-
     // Member Variables
     HWND m_hwnd;
     HINSTANCE m_hInstance;
 
-    // Controls
-    HWND m_hListView;          // Component List
-    HWND m_hBtnAdd;            // Add manually Button
-    HWND m_hBtnRemove;         // Remove Button
-    HWND m_hBtnImport;         // Import DXF Button
+    // Menu bar
+    HMENU m_hMenu;
 
-    // Base plate parameters
-    HWND m_hEditPlateW;        // Sheet width
-    HWND m_hEditPlateH;        // Sheet height
-    HWND m_hEditMargin;        // Margins
-    HWND m_hEditSpacing;       // Minimum spacing
-    HWND m_hChkRotation;       // Allow Rotation checkbox
+    // Top Toolbar
+    HWND m_hToolbar;
 
-    // CNC Machine Parameters
-    HWND m_hEditSpindle;       // Spindle Speed
-    HWND m_hEditFeedCut;       // Cutting Feed
-    HWND m_hEditFeedPlunge;    // Plunge Feed
-    HWND m_hEditSafeZ;         // Safe Z Height
-    HWND m_hEditCutDepth;      // Cutting Depth
+    // LEFT PANEL - BAZA DETALI
+    HWND m_hGrpBazaDetali;
+    HWND m_hListViewDB;
+    HWND m_hEditSearch;
+    HWND m_hBtnSearchPencil;
+    HWND m_hBtnSearchPlay;
+    HWND m_hBtnReset;
+    HWND m_hBtnPlusMinus;
+    HWND m_hBtnScale;
 
-    // Action buttons
-    HWND m_hBtnNesting;        // Perform Nesting Button
-    HWND m_hBtnExportG;        // Export G-code Button
+    // LEFT PANEL - KOMPONENTY
+    HWND m_hGrpKomponenty;
+    HWND m_hListViewComp;
+    HWND m_hBtnAddComp;
+    HWND m_hBtnRemoveComp;
+    HWND m_hBtnMoveUp;
+    HWND m_hBtnMoveDown;
 
-    // Visualization and Layout stats
-    HWND m_hComboLayouts;      // ComboBox selector for active Sheet index
-    HWND m_hCanvas;            // Static custom control for drawing GDI shapes
-    HWND m_hStaticStats;       // Label displaying material utilization and sheet stats
+    // RIGHT PANEL - PODGLAD PLYTY
+    HWND m_hGrpPodgladPlyty;
+    HWND m_hCanvas;
+
+    // RIGHT PANEL - PARAMETRY
+    HWND m_hGrpParametry;
+    HWND m_hEditPlateW;
+    HWND m_hEditMargin;
+    HWND m_hEditSpacing;
+
+    // Custom Checkboxes for Rotations (0, 90, 180, 270)
+    HWND m_hChkRot0;
+    HWND m_hChkRot90;
+    HWND m_hChkRot180;
+    HWND m_hChkRot270;
+
+    // NC parameters
+    HWND m_hComboTool;
+    HWND m_hEditFeed;
+
+    // Action button
+    HWND m_hBtnGenerateNesting;
+
+    // Status bar
+    HWND m_hStatusBar;
 
     // Business Logic Instances
     ComponentManager m_compManager;
@@ -88,6 +106,9 @@ private:
     NestingParams m_nestingParams;
     NCParams m_ncParams;
     int m_activeSheetIndex;
+
+    // Performance measurement
+    double m_lastNestingTime;
 };
 
 #endif // MAINWINDOW_H
