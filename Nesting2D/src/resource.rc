@@ -1,0 +1,4 @@
+#include "resource.h"
+
+// Standard win32 empty resource script
+IDI_APP_ICON ICON DISCARDABLE "app.ico"
