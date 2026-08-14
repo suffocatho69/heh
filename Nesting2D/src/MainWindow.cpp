@@ -58,6 +58,11 @@
 // Global class name
 const char g_szClassName[] = "Nesting2DMainWindowClass";
 
+#include <thread>
+
+// Custom Win32 notification message when background nesting completes
+#define WM_NESTING_COMPLETE (WM_USER + 101)
+
 MainWindow::MainWindow()
     : m_hwnd(NULL), m_hInstance(NULL), m_hMenu(NULL), m_hToolbar(NULL),
       m_hGrpBazaDetali(NULL), m_hListViewDB(NULL), m_hEditSearch(NULL),
@@ -69,7 +74,7 @@ MainWindow::MainWindow()
       m_hEditMargin(NULL), m_hEditSpacing(NULL), m_hChkRot0(NULL), m_hChkRot90(NULL),
       m_hChkRot180(NULL), m_hChkRot270(NULL), m_hComboTool(NULL), m_hEditFeed(NULL),
       m_hBtnGenerateNesting(NULL), m_hStatusBar(NULL), m_activeSheetIndex(-1),
-      m_lastNestingTime(0.0) {
+      m_isNestingRunning(false), m_lastNestingTime(0.0) {
 
     // Seed database items and components for "Nestingator3000" visual styling
     m_compManager.addComponent(Component("Bok.dxf", 600.0, 300.0, 2));
@@ -195,6 +200,55 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             int width = LOWORD(lParam);
             int height = HIWORD(lParam);
             ResizeControls(width, height);
+            break;
+        }
+        case WM_NESTING_COMPLETE: {
+            m_isNestingRunning = false;
+
+            // Re-enable nesting button trigger and restore standard drawing
+            EnableWindow(m_hBtnGenerateNesting, TRUE);
+            SetWindowText(m_hBtnGenerateNesting, "GENERUJ NESTING");
+
+            // Re-enable other GUI elements
+            EnableWindow(m_hBtnAddComp, TRUE);
+            EnableWindow(m_hBtnRemoveComp, TRUE);
+            EnableWindow(m_hListViewComp, TRUE);
+
+            if (m_sheets.empty()) {
+                MessageBox(hwnd, "Brak elementów do ułożenia lub elementy za duże!", "Nesting Błąd", MB_OK | MB_ICONWARNING);
+                break;
+            }
+
+            m_activeSheetIndex = 0;
+
+            // Calculate total original parts count
+            int totalOriginal = 0;
+            for (const auto& c : m_compManager.getComponents()) {
+                totalOriginal += c.quantity;
+            }
+            NestingStats stats = ComponentManager::calculateStats(m_sheets, totalOriginal);
+
+            // Dynamically update bottom status bar fields
+            std::string itemText = std::to_string(totalOriginal) + " detali";
+            SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)itemText.c_str());
+
+            std::string sheetText = std::to_string(stats.totalSheets) + " płyty";
+            SendMessage(m_hStatusBar, SB_SETTEXT, 1, (LPARAM)sheetText.c_str());
+
+            std::stringstream ssUtil;
+            ssUtil << std::fixed << std::setprecision(2);
+            ssUtil << "Wykorzystanie " << stats.materialUtilization << "%";
+            SendMessage(m_hStatusBar, SB_SETTEXT, 2, (LPARAM)ssUtil.str().c_str());
+
+            std::stringstream ssTime;
+            ssTime << std::fixed << std::setprecision(2);
+            ssTime << "Czas " << m_lastNestingTime << " s";
+            SendMessage(m_hStatusBar, SB_SETTEXT, 3, (LPARAM)ssTime.str().c_str());
+
+            SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 wątków");
+
+            // Redraw canvas
+            InvalidateRect(m_hCanvas, NULL, TRUE);
             break;
         }
         case WM_COMMAND: {
@@ -684,6 +738,8 @@ void MainWindow::OnImportDXF() {
 }
 
 void MainWindow::OnRunNesting() {
+    if (m_isNestingRunning) return;
+
     char buf[128];
 
     // Parse input fields securely
@@ -725,48 +781,33 @@ void MainWindow::OnRunNesting() {
     m_ncParams.cuttingFeed = atof(buf);
     if (m_ncParams.cuttingFeed <= 0) m_ncParams.cuttingFeed = 1200.0;
 
-    // Run nesting logic & time performance
-    auto start = std::chrono::high_resolution_clock::now();
-    m_sheets = NestingEngine::performNesting(m_compManager.getComponents(), m_nestingParams);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end - start;
-    m_lastNestingTime = diff.count();
+    m_isNestingRunning = true;
 
-    if (m_sheets.empty()) {
-        MessageBox(m_hwnd, "Brak elementów do ułożenia lub elementy za duże!", "Nesting Błąd", MB_OK | MB_ICONWARNING);
-        return;
-    }
+    // Visual indicators during processing
+    EnableWindow(m_hBtnGenerateNesting, FALSE);
+    SetWindowText(m_hBtnGenerateNesting, "OBLI-CZANIE...");
 
-    m_activeSheetIndex = 0;
+    // Disable other modifying GUI elements during computation to avoid data races
+    EnableWindow(m_hBtnAddComp, FALSE);
+    EnableWindow(m_hBtnRemoveComp, FALSE);
+    EnableWindow(m_hListViewComp, FALSE);
 
-    // Calculate total original parts count
-    int totalOriginal = 0;
-    for (const auto& c : m_compManager.getComponents()) {
-        totalOriginal += c.quantity;
-    }
-    NestingStats stats = ComponentManager::calculateStats(m_sheets, totalOriginal);
+    // Execute performNesting on a separate background thread to keep Win32 GUI completely fluid
+    std::thread bgWorker([this]() {
+        auto start = std::chrono::high_resolution_clock::now();
 
-    // Dynamically update bottom status bar fields
-    std::string itemText = std::to_string(totalOriginal) + " detali";
-    SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)itemText.c_str());
+        m_sheets = NestingEngine::performNesting(m_compManager.getComponents(), m_nestingParams);
 
-    std::string sheetText = std::to_string(stats.totalSheets) + " płyty";
-    SendMessage(m_hStatusBar, SB_SETTEXT, 1, (LPARAM)sheetText.c_str());
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> diff = end - start;
+        m_lastNestingTime = diff.count();
 
-    std::stringstream ssUtil;
-    ssUtil << std::fixed << std::setprecision(2);
-    ssUtil << "Wykorzystanie " << stats.materialUtilization << "%";
-    SendMessage(m_hStatusBar, SB_SETTEXT, 2, (LPARAM)ssUtil.str().c_str());
+        // Notify GUI Thread of complete nesting
+        PostMessage(m_hwnd, WM_NESTING_COMPLETE, 0, 0);
+    });
 
-    std::stringstream ssTime;
-    ssTime << std::fixed << std::setprecision(2);
-    ssTime << "Czas " << m_lastNestingTime << " s";
-    SendMessage(m_hStatusBar, SB_SETTEXT, 3, (LPARAM)ssTime.str().c_str());
-
-    SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 wątków");
-
-    // Redraw
-    InvalidateRect(m_hCanvas, NULL, TRUE);
+    // Detach worker thread so it executes independently and cleans up automatically upon termination
+    bgWorker.detach();
 }
 
 void MainWindow::OnExportGCode() {

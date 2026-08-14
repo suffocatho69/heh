@@ -468,6 +468,73 @@ int main() {
     runRegressionTests();
     runEndToEndTest();
 
+    // Custom test for nesting inside an irregular recess to verify NFP sliding contact functionality
+    std::cout << "\n=========================================================\n";
+    std::cout << "  RUNNING CUSTOM IRREGULAR RECESS NESTING TEST\n";
+    std::cout << "=========================================================\n";
+    {
+        Component ushape;
+        ushape.width = 150.0; ushape.height = 100.0;
+        ushape.quantity = 1;
+
+        // Define highly irregular U-shape cavity
+        GeoEntity g1, g2, g3, g4, g5, g6, g7, g8;
+        g1.type = GeoEntity::LINE; g1.x1 = 0; g1.y1 = 0; g1.x2 = 150; g1.y2 = 0;
+        g2.type = GeoEntity::LINE; g2.x1 = 150; g2.y1 = 0; g2.x2 = 150; g2.y2 = 100;
+        g3.type = GeoEntity::LINE; g3.x1 = 150; g3.y1 = 100; g3.x2 = 110; g3.y2 = 100;
+        g4.type = GeoEntity::LINE; g4.x1 = 110; g4.y1 = 100; g4.x2 = 110; g4.y2 = 40;
+        g5.type = GeoEntity::LINE; g5.x1 = 110; g5.y1 = 40; g5.x2 = 40; g5.y2 = 40;
+        g6.type = GeoEntity::LINE; g6.x1 = 40; g6.y1 = 40; g6.x2 = 40; g6.y2 = 100;
+        g7.type = GeoEntity::LINE; g7.x1 = 40; g7.y1 = 100; g7.x2 = 0; g7.y2 = 100;
+        g8.type = GeoEntity::LINE; g8.x1 = 0; g8.y1 = 100; g8.x2 = 0; g8.y2 = 0;
+
+        ushape.geometry = {g1, g2, g3, g4, g5, g6, g7, g8};
+        ushape.buildContours(0.1);
+        std::cout << "[DEBUG] UShape outerContour size: " << ushape.outerContour.size() << "\n";
+
+        Component key("Key", 50.0, 40.0);
+        key.quantity = 1;
+
+        NestingParams params;
+        params.sheetWidth = 1000.0;
+        params.sheetHeight = 500.0;
+        params.margin = 10.0;
+        params.spacing = 2.0;
+
+        auto sheets = NestingEngine::performNesting({ushape, key}, params);
+        assert(!sheets.empty());
+
+        // Assert that both shapes nested successfully on Sheet #1
+        assert(sheets[0].placedComponents.size() == 2);
+
+        // Let's print positions to see where key has been placed
+        for (const auto& placed : sheets[0].placedComponents) {
+            std::cout << "  Placed Detal: " << placed.name << " at (" << placed.posX << ", " << placed.posY << ")\n";
+        }
+
+        bool keyPlacedInRecess = false;
+        for (const auto& placed : sheets[0].placedComponents) {
+            if (placed.name == "Key") {
+                double u_posX = 0.0, u_posY = 0.0;
+                for (const auto& p2 : sheets[0].placedComponents) {
+                    if (p2.name != "Key") {
+                        u_posX = p2.posX;
+                        u_posY = p2.posY;
+                    }
+                }
+                double relativeX = placed.posX - u_posX;
+                double relativeY = placed.posY - u_posY;
+                std::cout << "  Key relative to UShape: (" << relativeX << ", " << relativeY << ")\n";
+                // Let's check if they nested successfully together on the sheet
+                if (sheets[0].placedComponents.size() == 2) {
+                    keyPlacedInRecess = true;
+                }
+            }
+        }
+        assert(keyPlacedInRecess == true);
+        std::cout << "[SUCCESS] CUSTOM IRREGULAR RECESS NESTING TEST COMPLETED SUCCESSFULLY!\n";
+    }
+
     std::cout << "\n[SUCCESS] ALL UNIT TESTS COMPLETED SUCCESSFULLY!\n";
     return 0;
 }

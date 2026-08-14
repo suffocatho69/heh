@@ -16,6 +16,7 @@ bool NestingEngine::intersect(
 }
 
 bool NestingEngine::isPointInPolygon(Point p, const std::vector<Point>& poly) {
+    if (poly.size() < 3) return false;
     bool inside = false;
     size_t j = poly.size() - 1;
     for (size_t i = 0; i < poly.size(); ++i) {
@@ -89,26 +90,37 @@ bool NestingEngine::checkCollision(const Component& comp1, const Component& comp
 
     if (poly1.empty() || poly2.empty()) return true;
 
-    // Convert outer contours to global coordinates
+    // Convert outer contours to global coordinates without double-rotation bug
+    // (getFlattenedOuterPolygon returns already rotated points, we only need to translate them)
     std::vector<Point> g_outer1;
     for (const auto& p : poly1) {
-        auto gp = comp1.localToGlobal(p.x, p.y);
-        g_outer1.push_back(Point(gp.first, gp.second));
+        g_outer1.push_back(Point(comp1.posX + p.x, comp1.posY + p.y));
     }
 
     std::vector<Point> g_outer2;
     for (const auto& p : poly2) {
-        auto gp = comp2.localToGlobal(p.x, p.y);
-        g_outer2.push_back(Point(gp.first, gp.second));
+        g_outer2.push_back(Point(comp2.posX + p.x, comp2.posY + p.y));
     }
 
-    // Convert inner contours (holes) to global coordinates
+    // Convert inner contours (holes) to global coordinates by rotating around same origin and translating
     std::vector<std::vector<Point>> g_inners1;
     for (const auto& inner : comp1.innerContours) {
         std::vector<Point> g_inner;
+
+        double angle1 = comp1.rotationAngle;
+        if (comp1.rotated && angle1 == 0.0) angle1 = 90.0;
+
+        // Find rotation bounds minX, minY for normalization matching outer contour
+        double minX = 1e30, minY = 1e30;
+        for (const auto& p : comp1.outerContour) {
+            Point rp = Component::transformPoint(p, angle1, Point(0, 0));
+            if (rp.x < minX) minX = rp.x;
+            if (rp.y < minY) minY = rp.y;
+        }
+
         for (const auto& p : inner) {
-            auto gp = comp1.localToGlobal(p.x, p.y);
-            g_inner.push_back(Point(gp.first, gp.second));
+            Point rp = Component::transformPoint(p, angle1, Point(0, 0));
+            g_inner.push_back(Point(comp1.posX + (rp.x - minX), comp1.posY + (rp.y - minY)));
         }
         g_inners1.push_back(g_inner);
     }
@@ -116,9 +128,20 @@ bool NestingEngine::checkCollision(const Component& comp1, const Component& comp
     std::vector<std::vector<Point>> g_inners2;
     for (const auto& inner : comp2.innerContours) {
         std::vector<Point> g_inner;
+
+        double angle2 = comp2.rotationAngle;
+        if (comp2.rotated && angle2 == 0.0) angle2 = 90.0;
+
+        double minX = 1e30, minY = 1e30;
+        for (const auto& p : comp2.outerContour) {
+            Point rp = Component::transformPoint(p, angle2, Point(0, 0));
+            if (rp.x < minX) minX = rp.x;
+            if (rp.y < minY) minY = rp.y;
+        }
+
         for (const auto& p : inner) {
-            auto gp = comp2.localToGlobal(p.x, p.y);
-            g_inner.push_back(Point(gp.first, gp.second));
+            Point rp = Component::transformPoint(p, angle2, Point(0, 0));
+            g_inner.push_back(Point(comp2.posX + (rp.x - minX), comp2.posY + (rp.y - minY)));
         }
         g_inners2.push_back(g_inner);
     }
@@ -275,7 +298,7 @@ std::vector<SheetLayout> NestingEngine::performNesting(
         if (strategy == 0) {
             // Area Descending
             std::sort(items.begin(), items.end(), [](const Component& a, const Component& b) {
-                return (a.width * a.height) > (b.width * b.height);
+                return a.calculateShoelaceArea() > b.calculateShoelaceArea();
             });
         } else if (strategy == 1) {
             // Width Descending
@@ -300,12 +323,14 @@ std::vector<SheetLayout> NestingEngine::performNesting(
         } else if (strategy == 5) {
             // Best Fit Heuristic Order
             std::sort(items.begin(), items.end(), [](const Component& a, const Component& b) {
-                return (a.width * a.height + std::max(a.width, a.height)) > (b.width * b.height + std::max(b.width, b.height));
+                double a_area = a.calculateShoelaceArea();
+                double b_area = b.calculateShoelaceArea();
+                return (a_area + std::max(a.width, a.height)) > (b_area + std::max(b.width, b.height));
             });
         } else {
             // Perturbed variations (Deterministic shuffle of area descending)
             std::sort(items.begin(), items.end(), [](const Component& a, const Component& b) {
-                return (a.width * a.height) > (b.width * b.height);
+                return a.calculateShoelaceArea() > b.calculateShoelaceArea();
             });
             for (size_t i = 0; i < items.size(); i += 2) {
                 if (i + 1 < items.size()) {
@@ -328,25 +353,75 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                 int bestRotation = 0;
                 double bestScore = 1e30;
 
-                // Generate Bottom-Left anchor search points
-                std::vector<std::pair<double, double>> scanPoints;
-                scanPoints.push_back(std::make_pair(params.margin, params.margin));
+                for (int rot : allowedRotations) {
+                    item.rotationAngle = rot;
+                    item.rotated = (rot == 90 || rot == 270);
 
-                for (const auto& placed : sheet.placedComponents) {
-                    scanPoints.push_back(std::make_pair(placed.posX, placed.posY + placed.getEffectiveHeight() + params.spacing));
-                    scanPoints.push_back(std::make_pair(placed.posX + placed.getEffectiveWidth() + params.spacing, placed.posY));
-                }
+                    auto item_poly = item.getFlattenedOuterPolygon();
+                    if (item_poly.empty()) continue;
 
-                for (const auto& pt : scanPoints) {
-                    double tx = pt.first;
-                    double ty = pt.second;
+                    double minLocalX = 1e30, minLocalY = 1e30;
+                    for (const auto& p : item_poly) {
+                        if (p.x < minLocalX) minLocalX = p.x;
+                        if (p.y < minLocalY) minLocalY = p.y;
+                    }
 
-                    for (int rot : allowedRotations) {
-                        item.rotationAngle = rot;
-                        item.rotated = (rot == 90 || rot == 270);
+                    // Generate candidates directly based on the polygon contours (Minkowski sum / NFP approximation)
+                    std::vector<Point> candidates;
+
+                    // 1. Margin contacts
+                    candidates.push_back(Point(params.margin, params.margin));
+                    candidates.push_back(Point(params.margin - minLocalX, params.margin));
+                    candidates.push_back(Point(params.margin, params.margin - minLocalY));
+                    candidates.push_back(Point(params.margin - minLocalX, params.margin - minLocalY));
+
+                    // 2. Contour-contour vertex contacts (NFP/sliding contact offsets)
+                    for (const auto& placed : sheet.placedComponents) {
+                        auto placed_poly = placed.getFlattenedOuterPolygon();
+                        if (placed_poly.empty()) continue;
+
+                        std::vector<Point> g_placed;
+                        for (const auto& p : placed_poly) {
+                            auto gp = placed.localToGlobal(p.x, p.y);
+                            g_placed.push_back(Point(gp.first, gp.second));
+                        }
+
+                        // Also consider inner contours (holes) of placed parts as potential nesting spots!
+                        for (const auto& inner : placed.innerContours) {
+                            for (const auto& p : inner) {
+                                auto gp = placed.localToGlobal(p.x, p.y);
+                                g_placed.push_back(Point(gp.first, gp.second));
+                            }
+                        }
+
+                        // Pairwise Minkowski vertex-to-vertex contact with spacing offset
+                        for (const auto& vp : g_placed) {
+                            for (const auto& vi : item_poly) {
+                                double ox = vp.x - vi.x;
+                                double oy = vp.y - vi.y;
+
+                                // Shift in various radial directions by spacing to find contact clearance
+                                double dirs[8][2] = {
+                                    {1.0, 0.0}, {0.0, 1.0}, {-1.0, 0.0}, {0.0, -1.0},
+                                    {0.7071, 0.7071}, {-0.7071, 0.7071}, {-0.7071, -0.7071}, {0.7071, -0.7071}
+                                };
+                                for (int d = 0; d < 8; ++d) {
+                                    double cx = ox + dirs[d][0] * params.spacing;
+                                    double cy = oy + dirs[d][1] * params.spacing;
+                                    candidates.push_back(Point(cx, cy));
+                                }
+                            }
+                        }
+                    }
+
+                    // Evaluate candidates
+                    for (const auto& pt : candidates) {
+                        double tx = pt.x;
+                        double ty = pt.y;
 
                         if (canPlaceComponent(item, tx, ty, sheet.placedComponents, params)) {
-                            double score = ty * 15.0 + tx;
+                            // Bottom-Left score: prioritize lower Y, then lower X
+                            double score = ty * 10.0 + tx;
                             if (score < bestScore) {
                                 bestScore = score;
                                 bestX = tx;
@@ -383,13 +458,35 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                 for (int rot : allowedRotations) {
                     item.rotationAngle = rot;
                     item.rotated = (rot == 90 || rot == 270);
-                    if (canPlaceComponent(item, params.margin, params.margin, newSheet.placedComponents, params)) {
-                        double score = rot;
-                        if (score < bestScore) {
-                            bestScore = score;
-                            bestX = params.margin;
-                            bestY = params.margin;
-                            bestRotation = rot;
+
+                    auto item_poly = item.getFlattenedOuterPolygon();
+                    if (item_poly.empty()) continue;
+
+                    double minLocalX = 1e30, minLocalY = 1e30;
+                    for (const auto& p : item_poly) {
+                        if (p.x < minLocalX) minLocalX = p.x;
+                        if (p.y < minLocalY) minLocalY = p.y;
+                    }
+
+                    // For a completely new sheet, candidates start around margins
+                    std::vector<Point> candidates;
+                    candidates.push_back(Point(params.margin, params.margin));
+                    candidates.push_back(Point(params.margin - minLocalX, params.margin));
+                    candidates.push_back(Point(params.margin, params.margin - minLocalY));
+                    candidates.push_back(Point(params.margin - minLocalX, params.margin - minLocalY));
+
+                    for (const auto& pt : candidates) {
+                        double tx = pt.x;
+                        double ty = pt.y;
+
+                        if (canPlaceComponent(item, tx, ty, newSheet.placedComponents, params)) {
+                            double score = ty * 10.0 + tx + rot * 0.01;
+                            if (score < bestScore) {
+                                bestScore = score;
+                                bestX = tx;
+                                bestY = ty;
+                                bestRotation = rot;
+                            }
                         }
                     }
                 }
@@ -409,7 +506,7 @@ std::vector<SheetLayout> NestingEngine::performNesting(
             }
         }
 
-        // Calculate material utilization and CNC travel distance
+        // Calculate material utilization and CNC travel distance using exact calculateShoelaceArea()
         double totalPartsArea = 0;
         double sheetTotalArea = params.sheetWidth * params.sheetHeight;
         double totalUtilization = 0;
@@ -419,7 +516,7 @@ std::vector<SheetLayout> NestingEngine::performNesting(
             double partsArea = 0;
             Point lastPos(params.margin, params.margin);
             for (const auto& c : sheet.placedComponents) {
-                partsArea += (c.width * c.height);
+                partsArea += c.calculateShoelaceArea();
                 cncLength += std::sqrt((c.posX - lastPos.x)*(c.posX - lastPos.x) + (c.posY - lastPos.y)*(c.posY - lastPos.y));
                 lastPos = Point(c.posX, c.posY);
             }

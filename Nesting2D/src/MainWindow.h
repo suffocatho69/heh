@@ -107,6 +107,9 @@ private:
     NCParams m_ncParams;
     int m_activeSheetIndex;
 
+    // Thread safety flag for active calculation
+    bool m_isNestingRunning;
+
     // Performance measurement
     double m_lastNestingTime;
 };
