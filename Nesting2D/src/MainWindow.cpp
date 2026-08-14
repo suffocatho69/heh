@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <cmath>
 #include <chrono>
+#include <thread>
+#include <fstream>
 
 // Win32 Controls Identifiers
 #define IDC_MENU_PLIK_NEW       2001

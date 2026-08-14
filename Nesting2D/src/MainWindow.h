@@ -7,6 +7,8 @@
 #include <commdlg.h> // Explicitly include for OPENFILENAME, GetOpenFileName and GetSaveFileName
 #include <string>
 #include <vector>
+#include <thread>
+#include <fstream>
 #include "ComponentManager.h"
 #include "NestingEngine.h"
 #include "NCGenerator.h"
