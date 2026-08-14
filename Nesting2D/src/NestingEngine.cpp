@@ -76,6 +76,7 @@ bool NestingEngine::checkCollision(const Component& comp1, const Component& comp
     double w2 = comp2.getEffectiveWidth();
     double h2 = comp2.getEffectiveHeight();
 
+    // Bounding box pre-filter
     if (comp1.posX + w1 + spacing <= comp2.posX ||
         comp2.posX + w2 + spacing <= comp1.posX ||
         comp1.posY + h1 + spacing <= comp2.posY ||
@@ -88,32 +89,109 @@ bool NestingEngine::checkCollision(const Component& comp1, const Component& comp
 
     if (poly1.empty() || poly2.empty()) return true;
 
-    std::vector<Point> g_poly1, g_poly2;
+    // Convert outer contours to global coordinates
+    std::vector<Point> g_outer1;
     for (const auto& p : poly1) {
         auto gp = comp1.localToGlobal(p.x, p.y);
-        g_poly1.push_back(Point(gp.first, gp.second));
-    }
-    for (const auto& p : poly2) {
-        auto gp = comp2.localToGlobal(p.x, p.y);
-        g_poly2.push_back(Point(gp.first, gp.second));
+        g_outer1.push_back(Point(gp.first, gp.second));
     }
 
-    for (size_t i = 0; i < g_poly1.size() - 1; ++i) {
-        Point p1 = g_poly1[i];
-        Point p2 = g_poly1[i+1];
-        for (size_t j = 0; j < g_poly2.size() - 1; ++j) {
-            Point q1 = g_poly2[j];
-            Point q2 = g_poly2[j+1];
-            double d = segmentToSegmentDistance(p1, p2, q1, q2);
-            if (d < spacing - 1e-4) {
-                return true;
+    std::vector<Point> g_outer2;
+    for (const auto& p : poly2) {
+        auto gp = comp2.localToGlobal(p.x, p.y);
+        g_outer2.push_back(Point(gp.first, gp.second));
+    }
+
+    // Convert inner contours (holes) to global coordinates
+    std::vector<std::vector<Point>> g_inners1;
+    for (const auto& inner : comp1.innerContours) {
+        std::vector<Point> g_inner;
+        for (const auto& p : inner) {
+            auto gp = comp1.localToGlobal(p.x, p.y);
+            g_inner.push_back(Point(gp.first, gp.second));
+        }
+        g_inners1.push_back(g_inner);
+    }
+
+    std::vector<std::vector<Point>> g_inners2;
+    for (const auto& inner : comp2.innerContours) {
+        std::vector<Point> g_inner;
+        for (const auto& p : inner) {
+            auto gp = comp2.localToGlobal(p.x, p.y);
+            g_inner.push_back(Point(gp.first, gp.second));
+        }
+        g_inners2.push_back(g_inner);
+    }
+
+    // Helper lambda: check if two global polygons collide
+    auto polygonsCollide = [](const std::vector<Point>& A, const std::vector<Point>& B, double sp) {
+        for (size_t i = 0; i < A.size() - 1; ++i) {
+            for (size_t j = 0; j < B.size() - 1; ++j) {
+                double d = segmentToSegmentDistance(A[i], A[i+1], B[j], B[j+1]);
+                if (d < sp - 1e-4) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    // Check if comp2 is nested inside one of the holes of comp1 (innerContours / shape-in-shape support)
+    bool nestedInHole1 = false;
+    for (const auto& h : g_inners1) {
+        if (isPointInPolygon(g_outer2[0], h)) {
+            // comp2 must not collide with the hole boundaries
+            if (!polygonsCollide(g_outer2, h, spacing)) {
+                // And must not cross or be outside the hole (all vertices must be inside)
+                bool allInside = true;
+                for (const auto& pt : g_outer2) {
+                    if (!isPointInPolygon(pt, h)) {
+                        allInside = false;
+                        break;
+                    }
+                }
+                if (allInside) {
+                    nestedInHole1 = true;
+                    break;
+                }
             }
         }
     }
 
-    if (isPointInPolygon(g_poly1[0], g_poly2) || isPointInPolygon(g_poly2[0], g_poly1)) {
+    // Check if comp1 is nested inside one of the holes of comp2
+    bool nestedInHole2 = false;
+    for (const auto& h : g_inners2) {
+        if (isPointInPolygon(g_outer1[0], h)) {
+            // comp1 must not collide with the hole boundaries
+            if (!polygonsCollide(g_outer1, h, spacing)) {
+                bool allInside = true;
+                for (const auto& pt : g_outer1) {
+                    if (!isPointInPolygon(pt, h)) {
+                        allInside = false;
+                        break;
+                    }
+                }
+                if (allInside) {
+                    nestedInHole2 = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // If either is nested in a hole, there is no collision!
+    if (nestedInHole1 || nestedInHole2) {
+        return false;
+    }
+
+    // Otherwise, check for normal outer contour collision
+    if (polygonsCollide(g_outer1, g_outer2, spacing)) {
         return true;
-      }
+    }
+
+    if (isPointInPolygon(g_outer1[0], g_outer2) || isPointInPolygon(g_outer2[0], g_outer1)) {
+        return true;
+    }
 
     return false;
 }

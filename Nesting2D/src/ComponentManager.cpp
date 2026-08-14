@@ -69,7 +69,20 @@ NestingStats ComponentManager::calculateStats(const std::vector<SheetLayout>& sh
         uniqueSignatures.insert(sig);
     }
 
-    stats.materialUtilization = totalUtilizationSum / sheets.size();
+    // Recalculate average material utilization based on true Shoelace area
+    double totalSheetArea = sheets.size() * sheets[0].width * sheets[0].height;
+    double totalPartsRealArea = 0.0;
+    for (const auto& sheet : sheets) {
+        for (const auto& c : sheet.placedComponents) {
+            totalPartsRealArea += c.calculateShoelaceArea();
+        }
+    }
+    if (totalSheetArea > 0.0) {
+        stats.materialUtilization = (totalPartsRealArea / totalSheetArea) * 100.0;
+    } else {
+        stats.materialUtilization = 0.0;
+    }
+
     stats.uniqueLayouts = static_cast<int>(uniqueSignatures.size());
     stats.totalPlacedCount = placedCount;
     stats.totalUnplacedCount = (totalOriginalUnits > placedCount) ? (totalOriginalUnits - placedCount) : 0;

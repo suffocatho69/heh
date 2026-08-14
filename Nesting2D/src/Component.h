@@ -65,11 +65,18 @@ public:
     std::vector<Point> outerContour;                 // Flattened polygon of outer perimeter
     std::vector<std::vector<Point>> innerContours;   // Flattened polygons of internal holes
 
+    // Mapping of geometry entities to outer and inner contours
+    std::vector<size_t> outerEntityIndices;
+    std::vector<std::vector<size_t>> innerEntityIndices;
+
     // Helper to generate default rectangular geometry path if no DXF was loaded
     void generateDefaultRectangleGeometry();
 
     // Reconstruct the outer contour and inner contours from the geometry entities
     void buildContours(double tolerance = 0.1);
+
+    // Calculate the true physical area using Shoelace formula (outer area minus inner holes areas)
+    double calculateShoelaceArea() const;
 
     // Get the effective bounding box width and height based on rotationAngle
     double getEffectiveWidth() const;

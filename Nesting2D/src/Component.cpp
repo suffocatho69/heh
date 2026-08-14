@@ -296,6 +296,27 @@ void Component::buildContours(double tolerance) {
     }
 }
 
+static double calculateLoopArea(const std::vector<Point>& poly) {
+    if (poly.size() < 3) return 0.0;
+    double area = 0.0;
+    size_t j = poly.size() - 1;
+    for (size_t i = 0; i < poly.size(); ++i) {
+        area += (poly[j].x + poly[i].x) * (poly[j].y - poly[i].y);
+        j = i;
+    }
+    return std::abs(area / 2.0);
+}
+
+double Component::calculateShoelaceArea() const {
+    double outerArea = calculateLoopArea(outerContour);
+    double innerAreaTotal = 0.0;
+    for (const auto& inner : innerContours) {
+        innerAreaTotal += calculateLoopArea(inner);
+    }
+    double realArea = outerArea - innerAreaTotal;
+    return (realArea > 0.0) ? realArea : 0.0;
+}
+
 // Bounding box size getters
 double Component::getEffectiveWidth() const {
     double minX = 1e30, maxX = -1e30;
