@@ -10,7 +10,16 @@ struct NCParams {
     double cuttingFeed = 1500.0;   // F command (mm/min) for normal cuts
     double plungeFeed = 500.0;     // F command for plunging (Z axis movement)
     double safeZ = 10.0;           // Safe height for rapid travel (G00)
-    double cutDepth = -2.0;        // Cutting depth (negative value, Z axis)
+    double cutDepth = -6.0;        // Cutting depth (negative value, Z axis)
+
+    // Technology parameters
+    bool useRadiusComp = true;     // G41 / G42 support
+    double toolRadius = 4.0;       // tool radius for offset calculation
+    bool useTabs = true;           // technological bridges/tabs
+    double tabLength = 5.0;
+    double tabInterval = 150.0;
+    double tabHeight = 3.0;        // tab height relative to bottom of cut (Z = cutDepth + tabHeight)
+    double maxPassDepth = 3.0;     // maximum depth per pass for multi-pass
 };
 
 class NCGenerator {

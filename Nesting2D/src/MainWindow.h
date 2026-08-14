@@ -78,6 +78,10 @@ private:
     HWND m_hGrpPodgladPlyty;
     HWND m_hCanvas;
 
+    // Path simulation slider
+    HWND m_hSlider;
+    int m_simPercent;
+
     // RIGHT PANEL - PARAMETRY
     HWND m_hGrpParametry;
     HWND m_hEditPlateW;

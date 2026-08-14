@@ -25,6 +25,9 @@ struct NestingParams {
 
     // Advanced rotation step (in degrees)
     double angleStep = 0.0; // 0.0 means use checkboxes
+
+    // Custom polygonal boundary for irregular remnants support (if non-empty, use this as sheet border)
+    std::vector<Point> remnantOuterPolygon;
 };
 
 class NestingEngine {
@@ -55,7 +58,6 @@ public:
     // Minimum distance between two segments
     static double segmentToSegmentDistance(Point p1, Point p2, Point q1, Point q2);
 
-private:
     // Checks if a component can be placed at (x, y) on the sheet with specific dimensions
     static bool canPlaceComponent(
         const Component& comp,
@@ -64,6 +66,7 @@ private:
         const NestingParams& params
     );
 
+private:
     // Overlap helper for two placed 2D axis-aligned rectangles with extra spacing
     static bool intersect(
         double x1, double y1, double w1, double h1,

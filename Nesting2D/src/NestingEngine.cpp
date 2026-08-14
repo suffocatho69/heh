@@ -229,16 +229,47 @@ bool NestingEngine::canPlaceComponent(
     double w = comp.getEffectiveWidth();
     double h = comp.getEffectiveHeight();
 
-    if (x < params.margin || (x + w) > (params.sheetWidth - params.margin)) {
-        return false;
-    }
-    if (y < params.margin || (y + h) > (params.sheetHeight - params.margin)) {
-        return false;
-    }
-
     Component trial = comp;
     trial.posX = x;
     trial.posY = y;
+
+    // Retrieve active trial's global polygon coordinates
+    auto poly = trial.getFlattenedOuterPolygon();
+    if (poly.empty()) return false;
+
+    std::vector<Point> g_trial;
+    for (const auto& p : poly) {
+        g_trial.push_back(Point(x + p.x, y + p.y));
+    }
+
+    // Irregular remnants support: check containment inside params.remnantOuterPolygon
+    if (!params.remnantOuterPolygon.empty()) {
+        // 1. Every vertex of the trial component must reside within the remnant boundary
+        for (const auto& pt : g_trial) {
+            if (!isPointInPolygon(pt, params.remnantOuterPolygon)) {
+                return false;
+            }
+        }
+
+        // 2. Ensure we maintain 'margin' distance to the remnant border (no boundary crossings/overlap)
+        for (size_t i = 0; i < g_trial.size() - 1; ++i) {
+            for (size_t j = 0; j < params.remnantOuterPolygon.size() - 1; ++j) {
+                double d = segmentToSegmentDistance(g_trial[i], g_trial[i+1],
+                                                    params.remnantOuterPolygon[j], params.remnantOuterPolygon[j+1]);
+                if (d < params.margin - 1e-4) {
+                    return false;
+                }
+            }
+        }
+    } else {
+        // Standard rectangular sheet boundary check
+        if (x < params.margin || (x + w) > (params.sheetWidth - params.margin)) {
+            return false;
+        }
+        if (y < params.margin || (y + h) > (params.sheetHeight - params.margin)) {
+            return false;
+        }
+    }
 
     for (const auto& placed : alreadyPlaced) {
         if (intersect(x, y, w, h,

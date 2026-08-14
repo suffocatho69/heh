@@ -535,6 +535,84 @@ int main() {
         std::cout << "[SUCCESS] CUSTOM IRREGULAR RECESS NESTING TEST COMPLETED SUCCESSFULLY!\n";
     }
 
+    // Advanced Technology, Multi-pass, G41/G42, tabs, and remnants tests
+    std::cout << "\n=========================================================\n";
+    std::cout << "  RUNNING ADVANCED CNC TECHNOLOGY & REMNANTS TESTS\n";
+    std::cout << "=========================================================\n";
+    {
+        // 1. Test G41 / G42 compensation and multi-pass cutting
+        Component comp("TechBox", 100.0, 100.0);
+        comp.posX = 15.0; comp.posY = 15.0;
+
+        SheetLayout sheet;
+        sheet.width = 1000.0; sheet.height = 500.0;
+        sheet.placedComponents.push_back(comp);
+
+        NCParams params;
+        params.useRadiusComp = true;
+        params.cutDepth = -6.0;
+        params.maxPassDepth = 3.0; // requires 2 Z passes
+        params.useTabs = true;
+        params.tabInterval = 10.0; // force tab triggers
+
+        std::string gcode = NCGenerator::generateGCode({sheet}, params);
+        assert(!gcode.empty());
+
+        // Verify Z-passes were generated
+        assert(gcode.find("PASS #1") != std::string::npos);
+        assert(gcode.find("PASS #2") != std::string::npos);
+
+        // Verify G41/G42 radius compensations were inserted
+        assert(gcode.find("G41") != std::string::npos);
+        assert(gcode.find("G40") != std::string::npos); // cancel commands
+
+        // 2. Test Partial-depth cuts on a single segment
+        Component compPartial;
+        compPartial.width = 100.0; compPartial.height = 100.0;
+        GeoEntity lineSeg;
+        lineSeg.type = GeoEntity::LINE;
+        lineSeg.x1 = 0; lineSeg.y1 = 0; lineSeg.x2 = 100.0; lineSeg.y2 = 0;
+        lineSeg.isPartialDepth = true;
+        lineSeg.customDepth = -2.0; // limit depth to -2.0 mm
+        compPartial.geometry.push_back(lineSeg);
+        compPartial.buildContours();
+        compPartial.posX = 20.0; compPartial.posY = 20.0;
+
+        SheetLayout sheetPartial;
+        sheetPartial.width = 1000.0; sheetPartial.height = 500.0;
+        sheetPartial.placedComponents.push_back(compPartial);
+
+        NCParams paramsPartial;
+        paramsPartial.cutDepth = -6.0;
+        paramsPartial.maxPassDepth = 6.0; // 1 Z pass
+
+        std::string gcodePartial = NCGenerator::generateGCode({sheetPartial}, paramsPartial);
+        assert(gcodePartial.find("Z-2.000") != std::string::npos); // restricted partial depth cut line
+
+        // 3. Test irregular remnant plate confinement
+        NestingParams nestParams;
+        nestParams.sheetWidth = 1000.0;
+        nestParams.sheetHeight = 500.0;
+        nestParams.margin = 5.0;
+
+        // Define a custom remnant outer polygon boundary of L-shape: 300x300 cutout
+        nestParams.remnantOuterPolygon = {
+            Point(0, 0), Point(500, 0), Point(500, 200), Point(200, 200), Point(200, 500), Point(0, 500), Point(0, 0)
+        };
+
+        Component targetComp("Target", 80.0, 80.0);
+
+        // Candidate fit inside remnant: (10, 10) fits beautifully
+        bool fits = NestingEngine::canPlaceComponent(targetComp, 10.0, 10.0, {}, nestParams);
+        assert(fits == true);
+
+        // Candidate fit outside remnant bounds: (400, 400) is in the cutout void!
+        bool fitsOut = NestingEngine::canPlaceComponent(targetComp, 400.0, 400.0, {}, nestParams);
+        assert(fitsOut == false);
+
+        std::cout << "[SUCCESS] ADVANCED CNC TECHNOLOGY & REMNANTS TESTS COMPLETED SUCCESSFULLY!\n";
+    }
+
     std::cout << "\n[SUCCESS] ALL UNIT TESTS COMPLETED SUCCESSFULLY!\n";
     return 0;
 }

@@ -37,6 +37,10 @@ struct GeoEntity {
 
     // For polylines, splines, ellipses
     std::vector<Point> points;
+
+    // Technology parameters
+    bool isPartialDepth = false;
+    double customDepth = 0.0; // custom depth for this specific segment
 };
 
 class Component {

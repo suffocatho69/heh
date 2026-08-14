@@ -53,6 +53,7 @@
 #define IDC_CHK_ROT180          7007
 #define IDC_CHK_ROT270          7008
 #define IDC_EDIT_ANGLESTEP      7015
+#define IDC_SLIDER              7020
 #define IDC_COMBO_TOOL          7009
 #define IDC_EDIT_FEED           7010
 #define IDC_BTN_GENERATE_NESTING 7011
@@ -74,7 +75,7 @@ MainWindow::MainWindow()
       m_hBtnPlusMinus(NULL), m_hBtnScale(NULL), m_hGrpKomponenty(NULL),
       m_hListViewComp(NULL), m_hBtnAddComp(NULL), m_hBtnRemoveComp(NULL),
       m_hBtnMoveUp(NULL), m_hBtnMoveDown(NULL), m_hGrpPodgladPlyty(NULL),
-      m_hCanvas(NULL), m_hGrpParametry(NULL), m_hEditPlateW(NULL),
+      m_hCanvas(NULL), m_hSlider(NULL), m_simPercent(0), m_hGrpParametry(NULL), m_hEditPlateW(NULL),
       m_hEditMargin(NULL), m_hEditSpacing(NULL), m_hChkRot0(NULL), m_hChkRot90(NULL),
       m_hChkRot180(NULL), m_hChkRot270(NULL), m_hEditAngleStep(NULL), m_hComboTool(NULL), m_hEditFeed(NULL),
       m_hBtnGenerateNesting(NULL), m_hStatusBar(NULL), m_activeSheetIndex(-1),
@@ -221,6 +222,14 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case WM_CREATE: {
             InitControls(hwnd);
             RefreshListView();
+            break;
+        }
+        case WM_HSCROLL: {
+            if (lParam == (LPARAM)m_hSlider) {
+                int pos = SendMessage(m_hSlider, TBM_GETPOS, 0, 0);
+                m_simPercent = pos;
+                InvalidateRect(m_hCanvas, NULL, TRUE);
+            }
             break;
         }
         case WM_SIZE: {
@@ -736,7 +745,14 @@ void MainWindow::InitControls(HWND hwnd) {
     // Standard Retro Canvas GDI display
     m_hCanvas = CreateWindowEx(WS_EX_CLIENTEDGE, "STATIC", "",
         WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
-        485, 85, 570, 340, hwnd, (HMENU)IDC_CANVAS, m_hInstance, NULL);
+        485, 85, 570, 330, hwnd, (HMENU)IDC_CANVAS, m_hInstance, NULL);
+
+    // Trackbar horizontal slider for path simulation animation
+    m_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, "Symulacja",
+        WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_AUTOTICKS,
+        485, 420, 570, 25, hwnd, (HMENU)IDC_SLIDER, m_hInstance, NULL);
+    SendMessage(m_hSlider, TBM_SETRANGE, TRUE, MAKELONG(0, 100));
+    SendMessage(m_hSlider, TBM_SETPOS, TRUE, 0);
 
     // Parametry Panel
     m_hGrpParametry = CreateWindowEx(0, "BUTTON", "Parametry",
@@ -890,7 +906,8 @@ void MainWindow::ResizeControls(int width, int height) {
 
         // Reposition right panel groupboxes and controls
         MoveWindow(m_hGrpPodgladPlyty, 470, 60, rightWidth - 10, height - 360, TRUE);
-        MoveWindow(m_hCanvas, 485, 85, rightWidth - 40, height - 405, TRUE);
+        MoveWindow(m_hCanvas, 485, 85, rightWidth - 40, height - 420, TRUE);
+        MoveWindow(m_hSlider, 485, height - 325, rightWidth - 40, 25, TRUE);
 
         MoveWindow(m_hGrpParametry, 470, height - 290, rightWidth - 10, 230, TRUE);
     }
@@ -1262,6 +1279,94 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
 
             DeleteObject(pathPen);
             count++;
+        }
+
+        // --- PATH SIMULATION OVERLAY ---
+        if (m_simPercent > 0) {
+            std::vector<Point> fullSimPath;
+
+            for (const auto& comp : sheet.placedComponents) {
+                double angle = comp.rotationAngle;
+                if (comp.rotated && angle == 0.0) angle = 90.0;
+
+                double minX = 1e30, minY = 1e30;
+                for (const auto& p : comp.outerContour) {
+                    Point rp = Component::transformPoint(p, angle, Point(0, 0));
+                    if (rp.x < minX) minX = rp.x;
+                    if (rp.y < minY) minY = rp.y;
+                }
+
+                // Holes cut first (strict sequence)
+                for (const auto& inner : comp.innerContours) {
+                    for (const auto& p : inner) {
+                        Point rp = Component::transformPoint(p, angle, Point(0, 0));
+                        fullSimPath.push_back(Point(comp.posX + (rp.x - minX), comp.posY + (rp.y - minY)));
+                    }
+                    if (!inner.empty()) {
+                        Point rp = Component::transformPoint(inner.front(), angle, Point(0, 0));
+                        fullSimPath.push_back(Point(comp.posX + (rp.x - minX), comp.posY + (rp.y - minY)));
+                    }
+                }
+
+                // Outer perimeter cut last
+                for (const auto& p : comp.outerContour) {
+                    Point rp = Component::transformPoint(p, angle, Point(0, 0));
+                    fullSimPath.push_back(Point(comp.posX + (rp.x - minX), comp.posY + (rp.y - minY)));
+                }
+                if (!comp.outerContour.empty()) {
+                    Point rp = Component::transformPoint(comp.outerContour.front(), angle, Point(0, 0));
+                    fullSimPath.push_back(Point(comp.posX + (rp.x - minX), comp.posY + (rp.y - minY)));
+                }
+            }
+
+            if (!fullSimPath.empty()) {
+                size_t limitIdx = (fullSimPath.size() * m_simPercent) / 100;
+                if (limitIdx > fullSimPath.size()) limitIdx = fullSimPath.size();
+
+                // 1. Draw cut path so far (green line)
+                HPEN greenPen = CreatePen(PS_SOLID, 2, RGB(0, 255, 0));
+                SelectObject(memDC, greenPen);
+                for (size_t i = 0; i < limitIdx; ++i) {
+                    int sx = (int)(offX + fullSimPath[i].x * scale);
+                    int sy = (int)(offY + fullSimPath[i].y * scale);
+                    if (i == 0) {
+                        MoveToEx(memDC, sx, sy, NULL);
+                    } else {
+                        LineTo(memDC, sx, sy);
+                    }
+                }
+                DeleteObject(greenPen);
+
+                // 2. Draw remaining toolpath as dotted grey line
+                HPEN grayPen = CreatePen(PS_DOT, 1, RGB(180, 180, 180));
+                SelectObject(memDC, grayPen);
+                for (size_t i = (limitIdx > 0 ? limitIdx - 1 : 0); i < fullSimPath.size(); ++i) {
+                    int sx = (int)(offX + fullSimPath[i].x * scale);
+                    int sy = (int)(offY + fullSimPath[i].y * scale);
+                    if (i == (limitIdx > 0 ? limitIdx - 1 : 0)) {
+                        MoveToEx(memDC, sx, sy, NULL);
+                    } else {
+                        LineTo(memDC, sx, sy);
+                    }
+                }
+                DeleteObject(grayPen);
+
+                // 3. Draw active cutter position (yellow dot)
+                if (limitIdx > 0 && limitIdx - 1 < fullSimPath.size()) {
+                    int cx = (int)(offX + fullSimPath[limitIdx - 1].x * scale);
+                    int cy = (int)(offY + fullSimPath[limitIdx - 1].y * scale);
+
+                    HBRUSH yellowBrush = CreateSolidBrush(RGB(255, 255, 0));
+                    HPEN blackPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+                    SelectObject(memDC, yellowBrush);
+                    SelectObject(memDC, blackPen);
+
+                    Ellipse(memDC, cx - 6, cy - 6, cx + 6, cy + 6);
+
+                    DeleteObject(yellowBrush);
+                    DeleteObject(blackPen);
+                }
+            }
         }
     } else {
         // Technical logo splash

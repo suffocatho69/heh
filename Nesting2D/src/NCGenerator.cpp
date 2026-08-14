@@ -204,112 +204,197 @@ std::string NCGenerator::generateGCode(
                 // Chain entities to minimize tool lifts and guarantee continuous cuts
                 std::vector<GeoEntity> chained = chainEntities(group);
 
-                Point currentPos;
-                bool isPlunged = false;
+                // Multi-pass calculations
+                double targetDepth = -std::abs(params.cutDepth);
+                double maxStep = std::abs(params.maxPassDepth);
+                if (maxStep < 0.1) maxStep = 3.0;
+                int passesCount = static_cast<int>(std::ceil(std::abs(targetDepth) / maxStep));
+                if (passesCount < 1) passesCount = 1;
 
-                for (const auto& geo : chained) {
-                    if (geo.type == GeoEntity::LINE) {
-                        auto p1 = comp.localToGlobal(geo.x1, geo.y1);
-                        auto p2 = comp.localToGlobal(geo.x2, geo.y2);
+                // Loop over Z passes
+                for (int pass = 1; pass <= passesCount; ++pass) {
+                    double currentZ = (targetDepth / passesCount) * pass;
+                    ss << ";  --- PASS #" << pass << " AT Z = " << currentZ << " ---\n";
 
-                        Point startPt(p1.first, p1.second);
-                        Point endPt(p2.first, p2.second);
+                    Point currentPos;
+                    bool isPlunged = false;
+                    double accumLength = 0.0; // Track accumulated cutting length for tabs
 
-                        if (isPlunged && std::abs(currentPos.x - startPt.x) < 0.1 && std::abs(currentPos.y - startPt.y) < 0.1) {
-                            // Continuous path cutting without lift
-                            ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << params.cutDepth << " F" << (int)params.cuttingFeed << ".\n";
-                        } else {
-                            if (isPlunged) {
-                                ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                                isPlunged = false;
+                    for (const auto& geo : chained) {
+                        // Determine the Z depth for this specific segment (partial depth support)
+                        double passZ = currentZ;
+                        if (geo.isPartialDepth) {
+                            double limitZ = -std::abs(geo.customDepth);
+                            if (passZ < limitZ) {
+                                passZ = limitZ; // clamp to custom depth
                             }
-                            ss << "G00 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << "\n";
-                            ss << "G94 G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                            ss << "G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
-                            ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << params.cutDepth << " F" << (int)params.cuttingFeed << ".\n";
-                            isPlunged = true;
                         }
-                        currentPos = endPt;
-                    } else if (geo.type == GeoEntity::CIRCLE) {
-                        if (isPlunged) {
-                            ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                            isPlunged = false;
-                        }
-                        auto centerPt = comp.localToGlobal(geo.x1, geo.y1);
-                        double r = geo.radius;
-                        double startX = centerPt.first + r;
-                        double startY = centerPt.second;
 
-                        ss << "G00 X" << startX << " Y" << startY << " Z" << params.safeZ << "\n";
-                        ss << "G94 G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                        ss << "G01 X" << startX << " Y" << startY << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
-                        ss << "G02 X" << startX << " Y" << startY << " I" << -r << " J0.000 F" << (int)params.cuttingFeed << ".\n";
-                        ss << "G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                        currentPos = Point(startX, startY);
-                    } else if (geo.type == GeoEntity::ARC) {
-                        double r = geo.radius;
-                        double sa_rad = geo.start_angle * M_PI / 180.0;
-                        double ea_rad = geo.end_angle * M_PI / 180.0;
+                        if (geo.type == GeoEntity::LINE) {
+                            auto p1 = comp.localToGlobal(geo.x1, geo.y1);
+                            auto p2 = comp.localToGlobal(geo.x2, geo.y2);
 
-                        double localStartX = geo.x1 + r * std::cos(sa_rad);
-                        double localStartY = geo.y1 + r * std::sin(sa_rad);
-                        double localEndX = geo.x1 + r * std::cos(ea_rad);
-                        double localEndY = geo.y1 + r * std::sin(ea_rad);
+                            Point startPt(p1.first, p1.second);
+                            Point endPt(p2.first, p2.second);
 
-                        auto startPt = comp.localToGlobal(localStartX, localStartY);
-                        auto endPt = comp.localToGlobal(localEndX, localEndY);
-                        auto globalCenterPt = comp.localToGlobal(geo.x1, geo.y1);
-
-                        double i_offset = globalCenterPt.first - startPt.first;
-                        double j_offset = globalCenterPt.second - startPt.second;
-
-                        bool actualCCW = geo.ccw;
-
-                        if (isPlunged && std::abs(currentPos.x - startPt.first) < 0.1 && std::abs(currentPos.y - startPt.second) < 0.1) {
-                            ss << (actualCCW ? "G03" : "G02") << " X" << endPt.first << " Y" << endPt.second
-                               << " I" << i_offset << " J" << j_offset << " F" << (int)params.cuttingFeed << ".\n";
-                        } else {
-                            if (isPlunged) {
-                                ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                                isPlunged = false;
-                            }
-                            ss << "G00 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << "\n";
-                            ss << "G94 G01 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                            ss << "G01 X" << startPt.first << " Y" << startPt.second << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
-                            ss << (actualCCW ? "G03" : "G02") << " X" << endPt.first << " Y" << endPt.second
-                               << " I" << i_offset << " J" << j_offset << " F" << (int)params.cuttingFeed << ".\n";
-                            isPlunged = true;
-                        }
-                        currentPos = Point(endPt.first, endPt.second);
-                    } else if (geo.type == GeoEntity::POLYLINE) {
-                        if (!geo.points.empty()) {
-                            auto p0 = comp.localToGlobal(geo.points[0].x, geo.points[0].y);
-                            Point startPt(p0.first, p0.second);
+                            double segLen = std::sqrt((endPt.x - startPt.x)*(endPt.x - startPt.x) + (endPt.y - startPt.y)*(endPt.y - startPt.y));
 
                             if (isPlunged && std::abs(currentPos.x - startPt.x) < 0.1 && std::abs(currentPos.y - startPt.y) < 0.1) {
-                                // Already at start of polyline, keep plunged
+                                // Continuous path cutting without lift
+                                // Tab (bridge) calculation on outer contour
+                                if (loopIdx == -1 && params.useTabs && (accumLength + segLen > params.tabInterval)) {
+                                    double remainingToTab = params.tabInterval - accumLength;
+                                    double t1 = remainingToTab / segLen;
+                                    double t2 = (remainingToTab + params.tabLength) / segLen;
+                                    if (t2 > 1.0) t2 = 1.0;
+
+                                    Point tabStart(startPt.x + t1*(endPt.x - startPt.x), startPt.y + t1*(endPt.y - startPt.y));
+                                    Point tabEnd(startPt.x + t2*(endPt.x - startPt.x), startPt.y + t2*(endPt.y - startPt.y));
+
+                                    // Cut up to tab start
+                                    ss << "G01 X" << tabStart.x << " Y" << tabStart.y << " Z" << passZ << " F" << (int)params.cuttingFeed << ".\n";
+
+                                    // Raise Z for technological tab
+                                    double tabZ = passZ + params.tabHeight;
+                                    if (tabZ > 0.0) tabZ = 0.0;
+                                    ss << "G01 X" << tabStart.x << " Y" << tabStart.y << " Z" << tabZ << " F" << (int)params.plungeFeed << ".\n";
+                                    ss << "G01 X" << tabEnd.x << " Y" << tabEnd.y << " Z" << tabZ << " F" << (int)params.cuttingFeed << ".\n";
+
+                                    // Plunge back
+                                    ss << "G01 X" << tabEnd.x << " Y" << tabEnd.y << " Z" << passZ << " F" << (int)params.plungeFeed << ".\n";
+                                    ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << passZ << " F" << (int)params.cuttingFeed << ".\n";
+
+                                    accumLength = segLen - (remainingToTab + params.tabLength);
+                                    if (accumLength < 0.0) accumLength = 0.0;
+                                } else {
+                                    ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << passZ << " F" << (int)params.cuttingFeed << ".\n";
+                                    accumLength += segLen;
+                                }
                             } else {
                                 if (isPlunged) {
+                                    ss << "G40\n"; // cancel radius compensation on retract
                                     ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
                                     isPlunged = false;
                                 }
                                 ss << "G00 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << "\n";
+
+                                // Radius compensation activation
+                                if (params.useRadiusComp) {
+                                    if (loopIdx == -1) {
+                                        ss << "G41\n"; // Outer left
+                                    } else {
+                                        ss << "G42\n"; // Inner right
+                                    }
+                                }
+
                                 ss << "G94 G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
-                                ss << "G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.cutDepth << " F" << (int)params.plungeFeed << ".\n";
+                                ss << "G01 X" << startPt.x << " Y" << startPt.y << " Z" << passZ << " F" << (int)params.plungeFeed << ".\n";
+                                ss << "G01 X" << endPt.x << " Y" << endPt.y << " Z" << passZ << " F" << (int)params.cuttingFeed << ".\n";
                                 isPlunged = true;
+                                accumLength += segLen;
+                            }
+                            currentPos = endPt;
+                        } else if (geo.type == GeoEntity::CIRCLE) {
+                            if (isPlunged) {
+                                ss << "G40\n";
+                                ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                                isPlunged = false;
+                            }
+                            auto centerPt = comp.localToGlobal(geo.x1, geo.y1);
+                            double r = geo.radius;
+                            double startX = centerPt.first + r;
+                            double startY = centerPt.second;
+
+                            ss << "G00 X" << startX << " Y" << startY << " Z" << params.safeZ << "\n";
+
+                            if (params.useRadiusComp) {
+                                ss << "G42\n"; // Circle entities are holes in our system
                             }
 
-                            for (size_t k = 1; k < geo.points.size(); ++k) {
-                                auto pk = comp.localToGlobal(geo.points[k].x, geo.points[k].y);
-                                ss << "G01 X" << pk.first << " Y" << pk.second << " Z" << params.cutDepth << " F" << (int)params.cuttingFeed << ".\n";
-                                currentPos = Point(pk.first, pk.second);
+                            ss << "G94 G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                            ss << "G01 X" << startX << " Y" << startY << " Z" << passZ << " F" << (int)params.plungeFeed << ".\n";
+                            ss << "G02 X" << startX << " Y" << startY << " I" << -r << " J0.000 F" << (int)params.cuttingFeed << ".\n";
+                            ss << "G40\n"; // cancel after loop
+                            ss << "G01 X" << startX << " Y" << startY << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                            currentPos = Point(startX, startY);
+                        } else if (geo.type == GeoEntity::ARC) {
+                            double r = geo.radius;
+                            double sa_rad = geo.start_angle * M_PI / 180.0;
+                            double ea_rad = geo.end_angle * M_PI / 180.0;
+
+                            double localStartX = geo.x1 + r * std::cos(sa_rad);
+                            double localStartY = geo.y1 + r * std::sin(sa_rad);
+                            double localEndX = geo.x1 + r * std::cos(ea_rad);
+                            double localEndY = geo.y1 + r * std::sin(ea_rad);
+
+                            auto startPt = comp.localToGlobal(localStartX, localStartY);
+                            auto endPt = comp.localToGlobal(localEndX, localEndY);
+                            auto globalCenterPt = comp.localToGlobal(geo.x1, geo.y1);
+
+                            double i_offset = globalCenterPt.first - startPt.first;
+                            double j_offset = globalCenterPt.second - startPt.second;
+
+                            bool actualCCW = geo.ccw;
+
+                            if (isPlunged && std::abs(currentPos.x - startPt.first) < 0.1 && std::abs(currentPos.y - startPt.second) < 0.1) {
+                                ss << (actualCCW ? "G03" : "G02") << " X" << endPt.first << " Y" << endPt.second
+                                   << " I" << i_offset << " J" << j_offset << " F" << (int)params.cuttingFeed << ".\n";
+                            } else {
+                                if (isPlunged) {
+                                    ss << "G40\n";
+                                    ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                                    isPlunged = false;
+                                }
+                                ss << "G00 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << "\n";
+
+                                if (params.useRadiusComp) {
+                                    if (loopIdx == -1) ss << "G41\n"; else ss << "G42\n";
+                                }
+
+                                ss << "G94 G01 X" << startPt.first << " Y" << startPt.second << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                                ss << "G01 X" << startPt.first << " Y" << startPt.second << " Z" << passZ << " F" << (int)params.plungeFeed << ".\n";
+                                ss << (actualCCW ? "G03" : "G02") << " X" << endPt.first << " Y" << endPt.second
+                                   << " I" << i_offset << " J" << j_offset << " F" << (int)params.cuttingFeed << ".\n";
+                                isPlunged = true;
+                            }
+                            currentPos = Point(endPt.first, endPt.second);
+                        } else if (geo.type == GeoEntity::POLYLINE) {
+                            if (!geo.points.empty()) {
+                                auto p0 = comp.localToGlobal(geo.points[0].x, geo.points[0].y);
+                                Point startPt(p0.first, p0.second);
+
+                                if (isPlunged && std::abs(currentPos.x - startPt.x) < 0.1 && std::abs(currentPos.y - startPt.y) < 0.1) {
+                                    // Already at start of polyline, keep plunged
+                                } else {
+                                    if (isPlunged) {
+                                        ss << "G40\n";
+                                        ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                                        isPlunged = false;
+                                    }
+                                    ss << "G00 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << "\n";
+
+                                    if (params.useRadiusComp) {
+                                        if (loopIdx == -1) ss << "G41\n"; else ss << "G42\n";
+                                    }
+
+                                    ss << "G94 G01 X" << startPt.x << " Y" << startPt.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                                    ss << "G01 X" << startPt.x << " Y" << startPt.y << " Z" << passZ << " F" << (int)params.plungeFeed << ".\n";
+                                    isPlunged = true;
+                                }
+
+                                for (size_t k = 1; k < geo.points.size(); ++k) {
+                                    auto pk = comp.localToGlobal(geo.points[k].x, geo.points[k].y);
+                                    ss << "G01 X" << pk.first << " Y" << pk.second << " Z" << passZ << " F" << (int)params.cuttingFeed << ".\n";
+                                    currentPos = Point(pk.first, pk.second);
+                                }
                             }
                         }
                     }
-                }
 
-                if (isPlunged) {
-                    ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    if (isPlunged) {
+                        ss << "G40\n"; // cancel radius compensation
+                        ss << "G01 X" << currentPos.x << " Y" << currentPos.y << " Z" << params.safeZ << " F" << (int)params.cuttingFeed << ".\n";
+                    }
                 }
             }
         }
