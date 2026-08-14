@@ -112,6 +112,7 @@ private:
     // Business Logic Instances
     ComponentManager m_compManager;
     std::vector<SheetLayout> m_sheets;
+    std::vector<SheetLayout> m_pendingSheets;
     NestingParams m_nestingParams;
     NCParams m_ncParams;
     int m_activeSheetIndex;

@@ -267,6 +267,7 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         }
         case WM_NESTING_COMPLETE: {
             m_isNestingRunning = false;
+            m_sheets = std::move(m_pendingSheets);
 
             // Re-enable nesting button trigger and restore standard drawing
             EnableWindow(m_hBtnGenerateNesting, TRUE);
@@ -1053,7 +1054,7 @@ void MainWindow::OnRunNesting() {
 
     GetWindowText(m_hEditSpacing, buf, sizeof(buf));
     std::string spacingStr(buf);
-    if (spacingStr.front() == ':') {
+    if (!spacingStr.empty() && spacingStr.front() == ':') {
         m_nestingParams.spacing = atof(spacingStr.substr(1).c_str());
     } else {
         m_nestingParams.spacing = atof(spacingStr.c_str());
@@ -1094,7 +1095,7 @@ void MainWindow::OnRunNesting() {
     m_bgThread = std::thread([this]() {
         auto start = std::chrono::high_resolution_clock::now();
 
-        m_sheets = NestingEngine::performNesting(m_compManager.getComponents(), m_nestingParams);
+        m_pendingSheets = NestingEngine::performNesting(m_compManager.getComponents(), m_nestingParams);
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> diff = end - start;
@@ -1159,8 +1160,8 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
     FillRect(memDC, &rect, bgBrush);
     DeleteObject(bgBrush);
 
-    // If sheets exist, draw the selected layout
-    if (m_activeSheetIndex >= 0 && m_activeSheetIndex < static_cast<int>(m_sheets.size())) {
+    // If sheets exist and calculation is not running, draw the selected layout
+    if (!m_isNestingRunning && m_activeSheetIndex >= 0 && m_activeSheetIndex < static_cast<int>(m_sheets.size())) {
         const auto& sheet = m_sheets[m_activeSheetIndex];
 
         double pad = 15.0;
