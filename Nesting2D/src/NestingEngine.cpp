@@ -586,7 +586,7 @@ bool NestingEngine::validateNesting(
     std::string& outErrorMessage
 ) {
     if (sheets.empty()) {
-        outErrorMessage = "Brak wygenerowanego rozkroju płyt!";
+        outErrorMessage = "Brak wygenerowanego rozkroju plyt!";
         return false;
     }
 
@@ -606,19 +606,19 @@ bool NestingEngine::validateNesting(
             if (comp.posX < params.margin || comp.posY < params.margin ||
                 comp.posX + w > params.sheetWidth - params.margin ||
                 comp.posY + h > params.sheetHeight - params.margin) {
-                outErrorMessage = "Detal '" + comp.name + "' na płycie #" + std::to_string(s + 1) + " wykracza poza granice płyty (uwzględniając marginesy)!";
+                outErrorMessage = "Detal '" + comp.name + "' na plycie #" + std::to_string(s + 1) + " wykracza poza granice plyty (uwzgledniajac marginesy)!";
                 return false;
             }
 
             auto poly = comp.getFlattenedOuterPolygon();
             if (poly.size() < 3) {
-                outErrorMessage = "Detal '" + comp.name + "' posiada niepoprawną lub pustą geometrię konturu!";
+                outErrorMessage = "Detal '" + comp.name + "' posiada niepoprawna lub pusta geometrie konturu!";
                 return false;
             }
 
             // 2. Closure check
             if (dist(poly.front(), poly.back()) > 0.5) {
-                outErrorMessage = "Kontur detalu '" + comp.name + "' nie jest poprawnie zamknięty (odstęp wynosi " + std::to_string(dist(poly.front(), poly.back())) + " mm)!";
+                outErrorMessage = "Kontur detalu '" + comp.name + "' nie jest poprawnie zamkniety (odstep wynosi " + std::to_string(dist(poly.front(), poly.back())) + " mm)!";
                 return false;
             }
 
@@ -626,7 +626,7 @@ bool NestingEngine::validateNesting(
             for (size_t k = 0; k < poly.size() - 1; ++k) {
                 double len = dist(poly[k], poly[k+1]);
                 if (len < 1e-4) {
-                    outErrorMessage = "Detal '" + comp.name + "' zawiera segment o zerowej długości (segment #" + std::to_string(k) + ")!";
+                    outErrorMessage = "Detal '" + comp.name + "' zawiera segment o zerowej dlugosci (segment #" + std::to_string(k) + ")!";
                     return false;
                 }
 
@@ -636,7 +636,7 @@ bool NestingEngine::validateNesting(
 
                     double d = segmentToSegmentDistance(poly[k], poly[k+1], poly[m], poly[m+1]);
                     if (d < 1e-4) {
-                        outErrorMessage = "Kontur detalu '" + comp.name + "' krzyżuje się sam ze sobą!";
+                        outErrorMessage = "Kontur detalu '" + comp.name + "' krzyzuje sie sam ze soba!";
                         return false;
                     }
                 }
@@ -645,7 +645,7 @@ bool NestingEngine::validateNesting(
             // 4. Collision check against all other components on the same sheet
             for (size_t j = i + 1; j < sheet.placedComponents.size(); ++j) {
                 if (checkCollision(comp, sheet.placedComponents[j], params.spacing)) {
-                    outErrorMessage = "Wykryto kolizję między detalem '" + comp.name + "' a detalem '" + sheet.placedComponents[j].name + "' na płycie #" + std::to_string(s + 1) + "!";
+                    outErrorMessage = "Wykryto kolizje miedzy detalem '" + comp.name + "' a detalem '" + sheet.placedComponents[j].name + "' na plycie #" + std::to_string(s + 1) + "!";
                     return false;
                 }
             }

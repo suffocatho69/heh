@@ -1058,7 +1058,7 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
         std::string title = "[ NESTINGATOR3000 ENGINE ACTIVE ]";
         TextOut(memDC, 30, 30, title.c_str(), static_cast<int>(title.size()));
 
-        std::string subtitle = "Zaimportuj pliki DXF lub dodaj detale ręcznie.";
+        std::string subtitle = "Zaimportuj pliki DXF lub dodaj detale recznie.";
         TextOut(memDC, 30, 65, subtitle.c_str(), static_cast<int>(subtitle.size()));
 
         DeleteObject(logoFont);
