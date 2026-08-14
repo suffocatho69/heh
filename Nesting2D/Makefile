@@ -15,6 +15,7 @@ OBJ_DIR = obj
 # Source files
 SRCS = $(SRC_DIR)/Component.cpp \
        $(SRC_DIR)/DXFReader.cpp \
+       $(SRC_DIR)/DXFWriter.cpp \
        $(SRC_DIR)/NestingEngine.cpp \
        $(SRC_DIR)/ComponentManager.cpp \
        $(SRC_DIR)/NCGenerator.cpp

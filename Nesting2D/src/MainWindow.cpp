@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "resource.h"
 #include "DXFReader.h"
+#include "DXFWriter.h"
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -192,6 +193,29 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 
 LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
+        case WM_NOTIFY: {
+            LPNMHDR lpnmhdr = (LPNMHDR)lParam;
+            if (lpnmhdr->idFrom == IDC_LIST_DB && lpnmhdr->code == NM_DBLCLK) {
+                // Double click inside BazaDXF lists - load automatically into Components list!
+                int idx = ListView_GetNextItem(m_hListViewDB, -1, LVNI_SELECTED);
+                if (idx != -1) {
+                    char szName[260] = { 0 };
+                    ListView_GetItemText(m_hListViewDB, idx, 0, szName, sizeof(szName));
+
+                    std::string fullPath = "BazaDXF/" + std::string(szName);
+                    Component dxfComp;
+                    if (DXFReader::loadDXF(fullPath, dxfComp)) {
+                        dxfComp.quantity = 5; // Default quantity
+                        m_compManager.addComponent(dxfComp);
+                        RefreshListView();
+                        MessageBox(hwnd, "Plik zaimportowany z bazy detali!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBox(hwnd, "Nie udalo sie zaladowac wybranego pliku DXF.", "Blad", MB_OK | MB_ICONERROR);
+                    }
+                }
+            }
+            break;
+        }
         case WM_CREATE: {
             InitControls(hwnd);
             RefreshListView();
@@ -266,9 +290,38 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                     break;
                 case IDC_MENU_PLIK_OPEN:
                 case IDC_TB_BTN_OPEN:
-                case IDC_TB_BTN_DXF:
                     OnImportDXF();
                     break;
+                case IDC_TB_BTN_SHEETS:
+                case IDC_TB_BTN_DXF: {
+                    if (m_sheets.empty()) {
+                        MessageBox(hwnd, "Najpierw wygeneruj nesting aby wyeksportowac arkusze do DXF!", "Informacja", MB_OK | MB_ICONINFORMATION);
+                        break;
+                    }
+                    OPENFILENAME ofn;
+                    char szFile[260] = "uklad_plyt.dxf";
+
+                    ZeroMemory(&ofn, sizeof(ofn));
+                    ofn.lStructSize = sizeof(ofn);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFile = szFile;
+                    ofn.nMaxFile = sizeof(szFile);
+                    ofn.lpstrFilter = "Pliki DXF (*.dxf)\0*.dxf\0Wszystkie Pliki (*.*)\0*.*\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                    if (GetSaveFileName(&ofn) == TRUE) {
+                        if (DXFWriter::exportSheetLayout(szFile, m_sheets)) {
+                            MessageBox(hwnd, "Arkusze zostaly wyeksportowane do pliku DXF pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBox(hwnd, "Nie udalo sie zapisac pliku DXF.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                        }
+                    }
+                    break;
+                }
                 case IDC_MENU_PLIK_EXIT:
                     DestroyWindow(hwnd);
                     break;
@@ -290,6 +343,98 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 case IDC_TB_BTN_NC:
                     OnExportGCode();
                     break;
+                case IDC_TB_BTN_PDF: {
+                    if (m_sheets.empty()) {
+                        MessageBox(hwnd, "Najpierw wygeneruj nesting aby wyeksportowac raport!", "Informacja", MB_OK | MB_ICONINFORMATION);
+                        break;
+                    }
+                    OPENFILENAME ofn;
+                    char szFile[260] = "raport_rozkroju.txt";
+
+                    ZeroMemory(&ofn, sizeof(ofn));
+                    ofn.lStructSize = sizeof(ofn);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFile = szFile;
+                    ofn.nMaxFile = sizeof(szFile);
+                    ofn.lpstrFilter = "Raport tekstowy (*.txt)\0*.txt\0Wszystkie Pliki (*.*)\0*.*\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                    if (GetSaveFileName(&ofn) == TRUE) {
+                        std::ofstream rpt(szFile);
+                        if (rpt.is_open()) {
+                            rpt << "=========================================================\n";
+                            rpt << "  RAPORT ROZKROJU NESTINGATOR3000\n";
+                            rpt << "=========================================================\n\n";
+                            rpt << "Parametry plyty: " << m_nestingParams.sheetWidth << " x " << m_nestingParams.sheetHeight << " mm\n";
+                            rpt << "Margines: " << m_nestingParams.margin << " mm\n";
+                            rpt << "Odstep technologiczny: " << m_nestingParams.spacing << " mm\n";
+                            rpt << "Narzedzie: Laser (Frez 8mm)\n";
+                            rpt << "Posuw: " << m_ncParams.cuttingFeed << " mm/min\n\n";
+
+                            rpt << "STATYSTYKI ROZKROJU:\n";
+                            rpt << "---------------------------------------------------------\n";
+                            int totalOriginal = 0;
+                            for (const auto& c : m_compManager.getComponents()) {
+                                totalOriginal += c.quantity;
+                            }
+                            NestingStats stats = ComponentManager::calculateStats(m_sheets, totalOriginal);
+                            rpt << "Liczba plyt ogolem: " << stats.totalSheets << "\n";
+                            rpt << "Wykorzystanie materialu: " << stats.materialUtilization << " %\n";
+                            rpt << "Unikalne uklady: " << stats.uniqueLayouts << "\n";
+                            rpt << "Ulozone detale: " << stats.totalPlacedCount << " / " << totalOriginal << "\n\n";
+
+                            rpt << "SZCZEGOLY PLYT:\n";
+                            for (size_t s = 0; s < m_sheets.size(); ++s) {
+                                rpt << "Plyta #" << (s + 1) << " (Wykorzystanie: " << m_sheets[s].materialUtilization << " %):\n";
+                                for (const auto& c : m_sheets[s].placedComponents) {
+                                    rpt << "  - Detal: " << c.name << " na (" << c.posX << ", " << c.posY << ") obrot: " << c.rotationAngle << " deg\n";
+                                }
+                            }
+                            MessageBox(hwnd, "Raport tekstowy zostal zapisany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBox(hwnd, "Nie udalo sie zapisac pliku raportu.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                        }
+                    }
+                    break;
+                }
+                case IDC_TB_BTN_ZIP: {
+                    OPENFILENAME ofn;
+                    char szFile[260] = "kopia_projektu.txt"; // Retro txt backup to preserve portability
+
+                    ZeroMemory(&ofn, sizeof(ofn));
+                    ofn.lStructSize = sizeof(ofn);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFile = szFile;
+                    ofn.nMaxFile = sizeof(szFile);
+                    ofn.lpstrFilter = "Kopia zapasowa (*.txt)\0*.txt\0Wszystkie Pliki (*.*)\0*.*\0";
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                    if (GetSaveFileName(&ofn) == TRUE) {
+                        std::ofstream bk(szFile);
+                        if (bk.is_open()) {
+                            bk << "; KOPIA ZAPASOWA PROJEKTU NESTINGATOR3000\n";
+                            bk << "; LICZBA ELEMENTOW: " << m_compManager.getComponents().size() << "\n\n";
+                            for (const auto& c : m_compManager.getComponents()) {
+                                bk << "DETAL: " << c.name << "\n";
+                                bk << "  SZEROKOSC: " << c.width << "\n";
+                                bk << "  WYSOKOSC: " << c.height << "\n";
+                                bk << "  ILOSC: " << c.quantity << "\n\n";
+                            }
+                            MessageBox(hwnd, "Kopia zapasowa projektu zostala zapisana pomyslnie!", "Kopia zapasowa", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBox(hwnd, "Nie udalo sie zapisac kopii zapasowej.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                        }
+                    }
+                    break;
+                }
                 case IDC_BTN_RESET: {
                     SetWindowText(m_hEditSearch, "");
                     break;
@@ -415,16 +560,53 @@ void MainWindow::InitControls(HWND hwnd) {
     lvc.pszText = (LPSTR)"Kategoria";
     ListView_InsertColumn(m_hListViewDB, 0, &lvc);
 
-    // Seed visual folders
-    const char* folders[] = { "[Kat] Elementy", "[Kat] Meble", "[Kat] Fronty", "[Kat] Wlasne" };
-    for (int i = 0; i < 4; ++i) {
+    // Create BazaDXF directory on startup and scan it for real DXF browser support
+    CreateDirectory("BazaDXF", NULL);
+
+    // Write sample mock DXFs if none are present
+    {
+        std::ofstream mock1("BazaDXF/Bok_sample.dxf");
+        if (mock1.is_open()) {
+            mock1 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n400.0\n21\n0.0\n"
+                  << "0\nLINE\n10\n400.0\n20\n0.0\n11\n400.0\n21\n300.0\n"
+                  << "0\nLINE\n10\n400.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
+                  << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+        }
+        std::ofstream mock2("BazaDXF/Front_sample.dxf");
+        if (mock2.is_open()) {
+            mock2 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n300.0\n21\n0.0\n"
+                  << "0\nLINE\n10\n300.0\n20\n0.0\n11\n300.0\n21\n300.0\n"
+                  << "0\nLINE\n10\n300.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
+                  << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+        }
+    }
+
+    // Scan BazaDXF directory for .dxf files
+    WIN32_FIND_DATA ffd;
+    HANDLE hFind = FindFirstFile("BazaDXF/*.dxf", &ffd);
+    int itemIdx = 0;
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            LVITEM lvi;
+            lvi.mask = LVIF_TEXT;
+            lvi.iItem = itemIdx;
+            lvi.iSubItem = 0;
+            lvi.pszText = ffd.cFileName;
+            ListView_InsertItem(m_hListViewDB, &lvi);
+            ListView_SetCheckState(m_hListViewDB, itemIdx, TRUE);
+            itemIdx++;
+        } while (FindNextFile(hFind, &ffd) != 0);
+        FindClose(hFind);
+    }
+
+    if (itemIdx == 0) {
+        // Fallback placeholder
         LVITEM lvi;
         lvi.mask = LVIF_TEXT;
-        lvi.iItem = i;
+        lvi.iItem = 0;
         lvi.iSubItem = 0;
-        lvi.pszText = (LPSTR)folders[i];
+        lvi.pszText = (LPSTR)"Brak plikow DXF w BazaDXF/";
         ListView_InsertItem(m_hListViewDB, &lvi);
-        ListView_SetCheckState(m_hListViewDB, i, TRUE);
     }
 
     // Search Box and buttons

@@ -10,7 +10,7 @@ CppCompiler=
 Linker=-mwindows_@@_-lcomctl32_@@_-lgdi32_@@_-lpthread_@@_
 IsCtxApp=1
 CompilerType=0
-UnitCount=14
+UnitCount=16
 
 [ClassInformation]
 PageCount=0
@@ -172,3 +172,23 @@ ProductName=Retro Nesting 2D
 ProductVersion=1.0.0.0
 AutoIncBuildNr=0
 SyncProduct=1
+
+[Unit15]
+FileName=src\DXFWriter.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit16]
+FileName=src\DXFWriter.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=

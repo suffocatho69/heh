@@ -382,7 +382,15 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                     candidates.push_back(Point(params.margin - minLocalX, params.margin - minLocalY));
 
                     // 2. Contour-contour vertex contacts (NFP/sliding contact offsets)
-                    for (const auto& placed : sheet.placedComponents) {
+                    // Apply O(N) performance pruning window (NFP_ANCHOR_WINDOW) to prevent slowdown with high part counts
+                    const size_t NFP_ANCHOR_WINDOW = 40;
+                    size_t startPlacedIdx = 0;
+                    if (sheet.placedComponents.size() > NFP_ANCHOR_WINDOW) {
+                        startPlacedIdx = sheet.placedComponents.size() - NFP_ANCHOR_WINDOW;
+                    }
+
+                    for (size_t pIdx = startPlacedIdx; pIdx < sheet.placedComponents.size(); ++pIdx) {
+                        const auto& placed = sheet.placedComponents[pIdx];
                         auto placed_poly = placed.getFlattenedOuterPolygon();
                         if (placed_poly.empty()) continue;
 
@@ -407,21 +415,63 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                             }
                         }
 
-                        // Pairwise Minkowski vertex-to-vertex contact with spacing offset
-                        for (const auto& vp : g_placed) {
-                            for (const auto& vi : item_poly) {
-                                double ox = vp.x - vi.x;
-                                double oy = vp.y - vi.y;
+                        // Mathematically slide vertices of B along edges of A to form complete sliding NFP candidates
+                        if (g_placed.size() >= 2 && item_poly.size() >= 2) {
+                            // 1. Slide each vertex B_j along each edge of A
+                            for (size_t i = 0; i < g_placed.size() - 1; ++i) {
+                                Point a1 = g_placed[i];
+                                Point a2 = g_placed[i+1];
 
-                                // Shift in various radial directions by spacing to find contact clearance
-                                double dirs[8][2] = {
-                                    {1.0, 0.0}, {0.0, 1.0}, {-1.0, 0.0}, {0.0, -1.0},
-                                    {0.7071, 0.7071}, {-0.7071, 0.7071}, {-0.7071, -0.7071}, {0.7071, -0.7071}
-                                };
-                                for (int d = 0; d < 8; ++d) {
-                                    double cx = ox + dirs[d][0] * params.spacing;
-                                    double cy = oy + dirs[d][1] * params.spacing;
-                                    candidates.push_back(Point(cx, cy));
+                                // Edge normal (pointing outwards)
+                                double dx = a2.x - a1.x;
+                                double dy = a2.y - a1.y;
+                                double len = std::sqrt(dx*dx + dy*dy);
+                                double nx = 0.0, ny = 0.0;
+                                if (len > 1e-9) {
+                                    nx = -dy / len;
+                                    ny = dx / len;
+                                }
+
+                                for (const auto& bj : item_poly) {
+                                    // Evaluate contacts at start, middle, and end of edge
+                                    double t_samples[3] = {0.0, 0.5, 1.0};
+                                    for (double t : t_samples) {
+                                        double edgeX = a1.x + t * dx;
+                                        double edgeY = a1.y + t * dy;
+
+                                        // Candidate position is edge touch point minus local candidate vertex
+                                        // offset outwards by safety technology spacing
+                                        double cx = edgeX - bj.x + nx * params.spacing;
+                                        double cy = edgeY - bj.y + ny * params.spacing;
+                                        candidates.push_back(Point(cx, cy));
+                                    }
+                                }
+                            }
+
+                            // 2. Slide each edge of B along each vertex of A
+                            for (const auto& ai : g_placed) {
+                                for (size_t j = 0; j < item_poly.size() - 1; ++j) {
+                                    Point b1 = item_poly[j];
+                                    Point b2 = item_poly[j+1];
+
+                                    double dx = b2.x - b1.x;
+                                    double dy = b2.y - b1.y;
+                                    double len = std::sqrt(dx*dx + dy*dy);
+                                    double nx = 0.0, ny = 0.0;
+                                    if (len > 1e-9) {
+                                        nx = -dy / len;
+                                        ny = dx / len;
+                                    }
+
+                                    double t_samples[3] = {0.0, 0.5, 1.0};
+                                    for (double t : t_samples) {
+                                        double edgeLocalX = b1.x + t * dx;
+                                        double edgeLocalY = b1.y + t * dy;
+
+                                        double cx = ai.x - edgeLocalX + nx * params.spacing;
+                                        double cy = ai.y - edgeLocalY + ny * params.spacing;
+                                        candidates.push_back(Point(cx, cy));
+                                    }
                                 }
                             }
                         }
