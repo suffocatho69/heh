@@ -16,6 +16,8 @@ OBJ_DIR = obj
 SRCS = $(SRC_DIR)/Component.cpp \
        $(SRC_DIR)/DXFReader.cpp \
        $(SRC_DIR)/DXFWriter.cpp \
+       $(SRC_DIR)/PDFWriter.cpp \
+       $(SRC_DIR)/ZIPWriter.cpp \
        $(SRC_DIR)/NestingEngine.cpp \
        $(SRC_DIR)/ComponentManager.cpp \
        $(SRC_DIR)/NCGenerator.cpp

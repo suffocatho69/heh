@@ -2,6 +2,8 @@
 #include "resource.h"
 #include "DXFReader.h"
 #include "DXFWriter.h"
+#include "PDFWriter.h"
+#include "ZIPWriter.h"
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -349,14 +351,14 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                         break;
                     }
                     OPENFILENAME ofn;
-                    char szFile[260] = "raport_rozkroju.txt";
+                    char szFile[260] = "raport_rozkroju.pdf";
 
                     ZeroMemory(&ofn, sizeof(ofn));
                     ofn.lStructSize = sizeof(ofn);
                     ofn.hwndOwner = hwnd;
                     ofn.lpstrFile = szFile;
                     ofn.nMaxFile = sizeof(szFile);
-                    ofn.lpstrFilter = "Raport tekstowy (*.txt)\0*.txt\0Wszystkie Pliki (*.*)\0*.*\0";
+                    ofn.lpstrFilter = "Raport PDF (*.pdf)\0*.pdf\0Wszystkie Pliki (*.*)\0*.*\0";
                     ofn.nFilterIndex = 1;
                     ofn.lpstrFileTitle = NULL;
                     ofn.nMaxFileTitle = 0;
@@ -364,53 +366,33 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                     ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
                     if (GetSaveFileName(&ofn) == TRUE) {
-                        std::ofstream rpt(szFile);
-                        if (rpt.is_open()) {
-                            rpt << "=========================================================\n";
-                            rpt << "  RAPORT ROZKROJU NESTINGATOR3000\n";
-                            rpt << "=========================================================\n\n";
-                            rpt << "Parametry plyty: " << m_nestingParams.sheetWidth << " x " << m_nestingParams.sheetHeight << " mm\n";
-                            rpt << "Margines: " << m_nestingParams.margin << " mm\n";
-                            rpt << "Odstep technologiczny: " << m_nestingParams.spacing << " mm\n";
-                            rpt << "Narzedzie: Laser (Frez 8mm)\n";
-                            rpt << "Posuw: " << m_ncParams.cuttingFeed << " mm/min\n\n";
-
-                            rpt << "STATYSTYKI ROZKROJU:\n";
-                            rpt << "---------------------------------------------------------\n";
-                            int totalOriginal = 0;
-                            for (const auto& c : m_compManager.getComponents()) {
-                                totalOriginal += c.quantity;
-                            }
-                            NestingStats stats = ComponentManager::calculateStats(m_sheets, totalOriginal);
-                            rpt << "Liczba plyt ogolem: " << stats.totalSheets << "\n";
-                            rpt << "Wykorzystanie materialu: " << stats.materialUtilization << " %\n";
-                            rpt << "Unikalne uklady: " << stats.uniqueLayouts << "\n";
-                            rpt << "Ulozone detale: " << stats.totalPlacedCount << " / " << totalOriginal << "\n\n";
-
-                            rpt << "SZCZEGOLY PLYT:\n";
-                            for (size_t s = 0; s < m_sheets.size(); ++s) {
-                                rpt << "Plyta #" << (s + 1) << " (Wykorzystanie: " << m_sheets[s].materialUtilization << " %):\n";
-                                for (const auto& c : m_sheets[s].placedComponents) {
-                                    rpt << "  - Detal: " << c.name << " na (" << c.posX << ", " << c.posY << ") obrot: " << c.rotationAngle << " deg\n";
-                                }
-                            }
-                            MessageBox(hwnd, "Raport tekstowy zostal zapisany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                        char toolBuf[128] = "Laser";
+                        int curSel = SendMessage(m_hComboTool, CB_GETCURSEL, 0, 0);
+                        if (curSel != CB_ERR) {
+                            SendMessage(m_hComboTool, CB_GETLBTEXT, curSel, (LPARAM)toolBuf);
+                        }
+                        if (PDFWriter::generatePDFReport(szFile, m_sheets, m_nestingParams, m_ncParams, toolBuf, m_lastNestingTime)) {
+                            MessageBox(hwnd, "Raport PDF zostal wygenerowany i zapisany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
                         } else {
-                            MessageBox(hwnd, "Nie udalo sie zapisac pliku raportu.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                            MessageBox(hwnd, "Nie udalo sie zapisac pliku PDF.", "Blad zapisu", MB_OK | MB_ICONERROR);
                         }
                     }
                     break;
                 }
                 case IDC_TB_BTN_ZIP: {
+                    if (m_sheets.empty()) {
+                        MessageBox(hwnd, "Najpierw wygeneruj nesting aby wyeksportowac paczke ZIP!", "Informacja", MB_OK | MB_ICONINFORMATION);
+                        break;
+                    }
                     OPENFILENAME ofn;
-                    char szFile[260] = "kopia_projektu.txt"; // Retro txt backup to preserve portability
+                    char szFile[260] = "paczka_projektu.zip";
 
                     ZeroMemory(&ofn, sizeof(ofn));
                     ofn.lStructSize = sizeof(ofn);
                     ofn.hwndOwner = hwnd;
                     ofn.lpstrFile = szFile;
                     ofn.nMaxFile = sizeof(szFile);
-                    ofn.lpstrFilter = "Kopia zapasowa (*.txt)\0*.txt\0Wszystkie Pliki (*.*)\0*.*\0";
+                    ofn.lpstrFilter = "Archiwum ZIP (*.zip)\0*.zip\0Wszystkie Pliki (*.*)\0*.*\0";
                     ofn.nFilterIndex = 1;
                     ofn.lpstrFileTitle = NULL;
                     ofn.nMaxFileTitle = 0;
@@ -418,20 +400,59 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                     ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
                     if (GetSaveFileName(&ofn) == TRUE) {
-                        std::ofstream bk(szFile);
-                        if (bk.is_open()) {
-                            bk << "; KOPIA ZAPASOWA PROJEKTU NESTINGATOR3000\n";
-                            bk << "; LICZBA ELEMENTOW: " << m_compManager.getComponents().size() << "\n\n";
-                            for (const auto& c : m_compManager.getComponents()) {
-                                bk << "DETAL: " << c.name << "\n";
-                                bk << "  SZEROKOSC: " << c.width << "\n";
-                                bk << "  WYSOKOSC: " << c.height << "\n";
-                                bk << "  ILOSC: " << c.quantity << "\n\n";
-                            }
-                            MessageBox(hwnd, "Kopia zapasowa projektu zostala zapisana pomyslnie!", "Kopia zapasowa", MB_OK | MB_ICONINFORMATION);
-                        } else {
-                            MessageBox(hwnd, "Nie udalo sie zapisac kopii zapasowej.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                        // Generate temporary files on disk
+                        std::string tempDXF = "temp_uklad.dxf";
+                        std::string tempNC = "temp_program.nc";
+                        std::string tempPDF = "temp_raport.pdf";
+
+                        // Get current tool name dynamically
+                        char toolBuf[128] = "Laser";
+                        int curSel = SendMessage(m_hComboTool, CB_GETCURSEL, 0, 0);
+                        if (curSel != CB_ERR) {
+                            SendMessage(m_hComboTool, CB_GETLBTEXT, curSel, (LPARAM)toolBuf);
                         }
+
+                        // Generate the files to disk
+                        bool dxfOk = DXFWriter::exportSheetLayout(tempDXF, m_sheets);
+
+                        std::string gcode = NCGenerator::generateGCode(m_sheets, m_ncParams);
+                        std::ofstream ncOut(tempNC);
+                        bool ncOk = ncOut.is_open();
+                        if (ncOk) {
+                            ncOut << gcode;
+                            ncOut.close();
+                        }
+
+                        bool pdfOk = PDFWriter::generatePDFReport(tempPDF, m_sheets, m_nestingParams, m_ncParams, toolBuf, m_lastNestingTime);
+
+                        if (dxfOk && ncOk && pdfOk) {
+                            // Helper to read file binary content
+                            auto readBinaryFile = [](const std::string& path) -> std::string {
+                                std::ifstream in(path, std::ios::binary);
+                                if (!in.is_open()) return "";
+                                std::stringstream buffer;
+                                buffer << in.rdbuf();
+                                return buffer.str();
+                            };
+
+                            std::vector<ZIPFileEntry> zipEntries;
+                            zipEntries.push_back({ "uklad_plyt.dxf", readBinaryFile(tempDXF) });
+                            zipEntries.push_back({ "program_rozkroju.nc", readBinaryFile(tempNC) });
+                            zipEntries.push_back({ "raport_rozkroju.pdf", readBinaryFile(tempPDF) });
+
+                            if (ZIPWriter::createZIP(szFile, zipEntries)) {
+                                MessageBox(hwnd, "Archiwum ZIP projektu zostalo wygenerowane i zapisane pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                            } else {
+                                MessageBox(hwnd, "Nie udalo sie stworzyc archiwum ZIP.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                            }
+                        } else {
+                            MessageBox(hwnd, "Nie udalo sie wygenerowac wszystkich plikow skladowych do paczki ZIP.", "Blad zapisu", MB_OK | MB_ICONERROR);
+                        }
+
+                        // Clean up temporary files cleanly
+                        DeleteFile(tempDXF.c_str());
+                        DeleteFile(tempNC.c_str());
+                        DeleteFile(tempPDF.c_str());
                     }
                     break;
                 }
@@ -563,21 +584,34 @@ void MainWindow::InitControls(HWND hwnd) {
     // Create BazaDXF directory on startup and scan it for real DXF browser support
     CreateDirectory("BazaDXF", NULL);
 
-    // Write sample mock DXFs if none are present
+    // Write sample mock DXFs only if they do not exist to prevent overwriting user modifications
     {
-        std::ofstream mock1("BazaDXF/Bok_sample.dxf");
-        if (mock1.is_open()) {
-            mock1 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n400.0\n21\n0.0\n"
-                  << "0\nLINE\n10\n400.0\n20\n0.0\n11\n400.0\n21\n300.0\n"
-                  << "0\nLINE\n10\n400.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
-                  << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+        std::ifstream f1("BazaDXF/Bok_sample.dxf");
+        bool exists1 = f1.good();
+        f1.close();
+
+        if (!exists1) {
+            std::ofstream mock1("BazaDXF/Bok_sample.dxf");
+            if (mock1.is_open()) {
+                mock1 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n400.0\n21\n0.0\n"
+                      << "0\nLINE\n10\n400.0\n20\n0.0\n11\n400.0\n21\n300.0\n"
+                      << "0\nLINE\n10\n400.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
+                      << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+            }
         }
-        std::ofstream mock2("BazaDXF/Front_sample.dxf");
-        if (mock2.is_open()) {
-            mock2 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n300.0\n21\n0.0\n"
-                  << "0\nLINE\n10\n300.0\n20\n0.0\n11\n300.0\n21\n300.0\n"
-                  << "0\nLINE\n10\n300.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
-                  << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+
+        std::ifstream f2("BazaDXF/Front_sample.dxf");
+        bool exists2 = f2.good();
+        f2.close();
+
+        if (!exists2) {
+            std::ofstream mock2("BazaDXF/Front_sample.dxf");
+            if (mock2.is_open()) {
+                mock2 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n300.0\n21\n0.0\n"
+                      << "0\nLINE\n10\n300.0\n20\n0.0\n11\n300.0\n21\n300.0\n"
+                      << "0\nLINE\n10\n300.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
+                      << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
+            }
         }
     }
 
