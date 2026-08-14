@@ -22,6 +22,9 @@ struct NestingParams {
     bool allowRot90 = true;
     bool allowRot180 = false;
     bool allowRot270 = false;
+
+    // Advanced rotation step (in degrees)
+    double angleStep = 0.0; // 0.0 means use checkboxes
 };
 
 class NestingEngine {

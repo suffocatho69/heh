@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <future>
 
 bool NestingEngine::intersect(
     double x1, double y1, double w1, double h1,
@@ -283,16 +284,21 @@ std::vector<SheetLayout> NestingEngine::performNesting(
     // 2. Define standard multi-strategy sort passes
     std::vector<NestingSolution> solutions;
 
-    // Check allowed rotations
+    // Check allowed rotations (standard fast presets or custom step multiples)
     std::vector<int> allowedRotations;
-    if (params.allowRot0) allowedRotations.push_back(0);
-    if (params.allowRot90) allowedRotations.push_back(90);
-    if (params.allowRot180) allowedRotations.push_back(180);
-    if (params.allowRot270) allowedRotations.push_back(270);
+    if (params.angleStep > 0.1 && params.angleStep <= 360.0) {
+        for (double a = 0.0; a < 360.0; a += params.angleStep) {
+            allowedRotations.push_back(static_cast<int>(std::round(a)));
+        }
+    } else {
+        if (params.allowRot0) allowedRotations.push_back(0);
+        if (params.allowRot90) allowedRotations.push_back(90);
+        if (params.allowRot180) allowedRotations.push_back(180);
+        if (params.allowRot270) allowedRotations.push_back(270);
+    }
     if (allowedRotations.empty()) allowedRotations.push_back(0);
 
-    // Run 7 different sorting strategies
-    for (int strategy = 0; strategy < 7; ++strategy) {
+    auto runStrategy = [&](int strategy) -> NestingSolution {
         std::vector<Component> items = baseItems;
 
         if (strategy == 0) {
@@ -382,15 +388,22 @@ std::vector<SheetLayout> NestingEngine::performNesting(
 
                         std::vector<Point> g_placed;
                         for (const auto& p : placed_poly) {
-                            auto gp = placed.localToGlobal(p.x, p.y);
-                            g_placed.push_back(Point(gp.first, gp.second));
+                            g_placed.push_back(Point(placed.posX + p.x, placed.posY + p.y));
                         }
 
                         // Also consider inner contours (holes) of placed parts as potential nesting spots!
                         for (const auto& inner : placed.innerContours) {
+                            double angle = placed.rotationAngle;
+                            if (placed.rotated && angle == 0.0) angle = 90.0;
+                            double minX = 1e30, minY = 1e30;
+                            for (const auto& p : placed.outerContour) {
+                                Point rp = Component::transformPoint(p, angle, Point(0,0));
+                                if (rp.x < minX) minX = rp.x;
+                                if (rp.y < minY) minY = rp.y;
+                            }
                             for (const auto& p : inner) {
-                                auto gp = placed.localToGlobal(p.x, p.y);
-                                g_placed.push_back(Point(gp.first, gp.second));
+                                Point rp = Component::transformPoint(p, angle, Point(0,0));
+                                g_placed.push_back(Point(placed.posX + (rp.x - minX), placed.posY + (rp.y - minY)));
                             }
                         }
 
@@ -533,7 +546,17 @@ std::vector<SheetLayout> NestingEngine::performNesting(
         sol.unplacedCount = unplacedCount;
         sol.totalUtilization = totalUtilization;
         sol.cncLength = cncLength;
-        solutions.push_back(sol);
+        return sol;
+    };
+
+    // Parallelize execution using std::async across 7 hardware workers
+    std::vector<std::future<NestingSolution>> futures;
+    for (int strategy = 0; strategy < 7; ++strategy) {
+        futures.push_back(std::async(std::launch::async, runStrategy, strategy));
+    }
+
+    for (auto& fut : futures) {
+        solutions.push_back(fut.get());
     }
 
     // 3. Selection of the absolute best result based on multi-level priority criteria

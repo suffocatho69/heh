@@ -133,9 +133,68 @@ static bool parseDXFStream(std::istream& in, Component& outComponent) {
             if (splinePoints.size() >= 2) {
                 GeoEntity geo;
                 geo.type = GeoEntity::POLYLINE;
-                for (const auto& p : splinePoints) {
-                    geo.points.push_back(p);
+
+                // Implement De Boor's algorithm for B-spline curve interpolation
+                // Degree defaults to 3 (or clamped based on points)
+                size_t n = splinePoints.size();
+                size_t p_degree = 3;
+                if (p_degree >= n) p_degree = n - 1;
+                if (p_degree < 1) p_degree = 1;
+
+                // Knot vector: uniform clamped B-spline knot vector
+                size_t m = n + p_degree + 1;
+                std::vector<double> knots(m);
+                for (size_t i = 0; i < m; ++i) {
+                    if (i <= p_degree) {
+                        knots[i] = 0.0;
+                    } else if (i >= m - 1 - p_degree) {
+                        knots[i] = 1.0;
+                    } else {
+                        knots[i] = static_cast<double>(i - p_degree) / (n - p_degree);
+                    }
                 }
+
+                // De Boor's recursive evaluation helper
+                auto deBoor = [&](double u) -> Point {
+                    // Find knot span index k
+                    size_t k = p_degree;
+                    for (size_t i = p_degree; i < n; ++i) {
+                        if (u >= knots[i] && u <= knots[i+1]) {
+                            k = i;
+                            break;
+                        }
+                    }
+                    if (u >= 1.0 - 1e-9) {
+                        k = n - 1;
+                    }
+
+                    // Initialize d coefficients
+                    std::vector<Point> d(p_degree + 1);
+                    for (size_t j = 0; j <= p_degree; ++j) {
+                        d[j] = splinePoints[k - p_degree + j];
+                    }
+
+                    // Triangular computation recursion
+                    for (size_t r = 1; r <= p_degree; ++r) {
+                        for (size_t j = p_degree; j >= r; --j) {
+                            double alpha = 0.0;
+                            double denom = knots[k - p_degree + j + 1 - r + p_degree] - knots[k - p_degree + j];
+                            if (std::abs(denom) > 1e-9) {
+                                alpha = (u - knots[k - p_degree + j]) / denom;
+                            }
+                            d[j].x = (1.0 - alpha) * d[j-1].x + alpha * d[j].x;
+                            d[j].y = (1.0 - alpha) * d[j-1].y + alpha * d[j].y;
+                        }
+                    }
+                    return d[p_degree];
+                };
+
+                // Generate 32 continuous, smooth points lying strictly on the evaluated B-spline curve
+                for (int s = 0; s <= 32; ++s) {
+                    double u = static_cast<double>(s) / 32.0;
+                    geo.points.push_back(deBoor(u));
+                }
+
                 outComponent.geometry.push_back(geo);
             }
             splinePoints.clear();

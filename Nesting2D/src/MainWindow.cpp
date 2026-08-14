@@ -49,6 +49,7 @@
 #define IDC_CHK_ROT90           7006
 #define IDC_CHK_ROT180          7007
 #define IDC_CHK_ROT270          7008
+#define IDC_EDIT_ANGLESTEP      7015
 #define IDC_COMBO_TOOL          7009
 #define IDC_EDIT_FEED           7010
 #define IDC_BTN_GENERATE_NESTING 7011
@@ -72,7 +73,7 @@ MainWindow::MainWindow()
       m_hBtnMoveUp(NULL), m_hBtnMoveDown(NULL), m_hGrpPodgladPlyty(NULL),
       m_hCanvas(NULL), m_hGrpParametry(NULL), m_hEditPlateW(NULL),
       m_hEditMargin(NULL), m_hEditSpacing(NULL), m_hChkRot0(NULL), m_hChkRot90(NULL),
-      m_hChkRot180(NULL), m_hChkRot270(NULL), m_hComboTool(NULL), m_hEditFeed(NULL),
+      m_hChkRot180(NULL), m_hChkRot270(NULL), m_hEditAngleStep(NULL), m_hComboTool(NULL), m_hEditFeed(NULL),
       m_hBtnGenerateNesting(NULL), m_hStatusBar(NULL), m_activeSheetIndex(-1),
       m_isNestingRunning(false), m_lastNestingTime(0.0) {
 
@@ -111,9 +112,9 @@ bool MainWindow::Create(HINSTANCE hInstance, int nCmdShow) {
     m_hMenu = CreateMenu();
     HMENU hMenuPlik = CreatePopupMenu();
     AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_NEW, "Nowy");
-    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_OPEN, "Otwórz...");
+    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_OPEN, "Otworz...");
     AppendMenu(hMenuPlik, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_EXIT, "Wyjdź");
+    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_EXIT, "Wyjdz");
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuPlik, "Plik");
 
     HMENU hMenuEdycja = CreatePopupMenu();
@@ -124,17 +125,17 @@ bool MainWindow::Create(HINSTANCE hInstance, int nCmdShow) {
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuEdycja, "Edycja");
 
     HMENU hMenuWidok = CreatePopupMenu();
-    AppendMenu(hMenuWidok, MF_STRING, 0, "Paski narzędzi");
+    AppendMenu(hMenuWidok, MF_STRING, 0, "Paski narzedzi");
     AppendMenu(hMenuWidok, MF_STRING, 0, "Pasek stanu");
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuWidok, "Widok");
 
     HMENU hMenuNarzedzia = CreatePopupMenu();
     AppendMenu(hMenuNarzedzia, MF_STRING, IDC_TB_BTN_NESTING, "Generuj Nesting");
     AppendMenu(hMenuNarzedzia, MF_STRING, IDC_TB_BTN_NC, "Generuj Kod NC");
-    AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuNarzedzia, "Narzędzia");
+    AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuNarzedzia, "Narzedzia");
 
     HMENU hMenuBiblioteka = CreatePopupMenu();
-    AppendMenu(hMenuBiblioteka, MF_STRING, 0, "Zarządzaj biblioteką...");
+    AppendMenu(hMenuBiblioteka, MF_STRING, 0, "Zarzadzaj biblioteka...");
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuBiblioteka, "Biblioteka");
 
     HMENU hMenuPomoc = CreatePopupMenu();
@@ -215,7 +216,7 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             EnableWindow(m_hListViewComp, TRUE);
 
             if (m_sheets.empty()) {
-                MessageBox(hwnd, "Brak elementów do ułożenia lub elementy za duże!", "Nesting Błąd", MB_OK | MB_ICONWARNING);
+                MessageBox(hwnd, "Brak elementow do ulozenia lub elementy za duze!", "Nesting Blad", MB_OK | MB_ICONWARNING);
                 break;
             }
 
@@ -232,7 +233,7 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             std::string itemText = std::to_string(totalOriginal) + " detali";
             SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)itemText.c_str());
 
-            std::string sheetText = std::to_string(stats.totalSheets) + " płyty";
+            std::string sheetText = std::to_string(stats.totalSheets) + " plyty";
             SendMessage(m_hStatusBar, SB_SETTEXT, 1, (LPARAM)sheetText.c_str());
 
             std::stringstream ssUtil;
@@ -245,7 +246,7 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             ssTime << "Czas " << m_lastNestingTime << " s";
             SendMessage(m_hStatusBar, SB_SETTEXT, 3, (LPARAM)ssTime.str().c_str());
 
-            SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 wątków");
+            SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 watkow");
 
             // Redraw canvas
             InvalidateRect(m_hCanvas, NULL, TRUE);
@@ -352,6 +353,10 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             break;
         }
         case WM_DESTROY: {
+            // Join active thread before actual window destruction to prevent use-after-free
+            if (m_bgThread.joinable()) {
+                m_bgThread.join();
+            }
             PostQuitMessage(0);
             return 0;
         }
@@ -379,17 +384,17 @@ void MainWindow::InitControls(HWND hwnd) {
         SendMessage(hBtn, WM_SETFONT, (WPARAM)hFontBold, TRUE);
     };
 
-    CreateToolbarBtn("New", IDC_TB_BTN_NEW, 10, 45);
-    CreateToolbarBtn("Open", IDC_TB_BTN_OPEN, 60, 50);
-    CreateToolbarBtn("Print", IDC_TB_BTN_PRINT, 115, 50);
-    CreateToolbarBtn("DXF", IDC_TB_BTN_DXF, 170, 45);
-    CreateToolbarBtn("Płyty", IDC_TB_BTN_SHEETS, 220, 50);
-    CreateToolbarBtn("Settings", IDC_TB_BTN_SETTINGS, 275, 70);
-    CreateToolbarBtn("Delete", IDC_TB_BTN_DELETE, 350, 60);
-    CreateToolbarBtn("Nesting", IDC_TB_BTN_NESTING, 420, 75);
-    CreateToolbarBtn("NC", IDC_TB_BTN_NC, 505, 45);
-    CreateToolbarBtn("PDF", IDC_TB_BTN_PDF, 555, 45);
-    CreateToolbarBtn("ZIP", IDC_TB_BTN_ZIP, 605, 45);
+    CreateToolbarBtn("Nowy", IDC_TB_BTN_NEW, 10, 50);
+    CreateToolbarBtn("Otworz", IDC_TB_BTN_OPEN, 65, 55);
+    CreateToolbarBtn("Drukuj", IDC_TB_BTN_PRINT, 125, 55);
+    CreateToolbarBtn("DXF", IDC_TB_BTN_DXF, 185, 45);
+    CreateToolbarBtn("Plyty", IDC_TB_BTN_SHEETS, 235, 50);
+    CreateToolbarBtn("Ustawienia", IDC_TB_BTN_SETTINGS, 290, 80);
+    CreateToolbarBtn("Usun", IDC_TB_BTN_DELETE, 375, 50);
+    CreateToolbarBtn("Nesting", IDC_TB_BTN_NESTING, 430, 65);
+    CreateToolbarBtn("NC", IDC_TB_BTN_NC, 500, 35);
+    CreateToolbarBtn("PDF", IDC_TB_BTN_PDF, 540, 45);
+    CreateToolbarBtn("ZIP", IDC_TB_BTN_ZIP, 590, 45);
 
     // 2. LEFT-HAND PANELS (DB and Components)
     m_hGrpBazaDetali = CreateWindowEx(0, "BUTTON", "BAZA DETALI",
@@ -397,7 +402,7 @@ void MainWindow::InitControls(HWND hwnd) {
         10, 60, 450, 310, hwnd, NULL, m_hInstance, NULL);
     SendMessage(m_hGrpBazaDetali, WM_SETFONT, (WPARAM)hFontBold, TRUE);
 
-    // Baza Detali Folder List with custom folders: Elementy, Meble, Fronty, Własne
+    // Baza Detali Folder List with custom folders: Elementy, Meble, Fronty, Wlasne
     m_hListViewDB = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, "",
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_NOCOLUMNHEADER | LVS_SINGLESEL,
         20, 85, 430, 185, hwnd, (HMENU)IDC_LIST_DB, m_hInstance, NULL);
@@ -411,7 +416,7 @@ void MainWindow::InitControls(HWND hwnd) {
     ListView_InsertColumn(m_hListViewDB, 0, &lvc);
 
     // Seed visual folders
-    const char* folders[] = { "📁 Elementy", "📁 Meble", "📁 Fronty", "📁 Własne" };
+    const char* folders[] = { "[Kat] Elementy", "[Kat] Meble", "[Kat] Fronty", "[Kat] Wlasne" };
     for (int i = 0; i < 4; ++i) {
         LVITEM lvi;
         lvi.mask = LVIF_TEXT;
@@ -433,22 +438,22 @@ void MainWindow::InitControls(HWND hwnd) {
         75, 280, 210, 22, hwnd, (HMENU)IDC_EDIT_SEARCH, m_hInstance, NULL);
     SendMessage(m_hEditSearch, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnSearchPencil = CreateWindowEx(0, "BUTTON", "🖍",
+    m_hBtnSearchPencil = CreateWindowEx(0, "BUTTON", "[R]",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         290, 280, 25, 22, hwnd, (HMENU)IDC_BTN_SEARCH_PENCIL, m_hInstance, NULL);
     SendMessage(m_hBtnSearchPencil, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnSearchPlay = CreateWindowEx(0, "BUTTON", "▶",
+    m_hBtnSearchPlay = CreateWindowEx(0, "BUTTON", "Go",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         320, 280, 25, 22, hwnd, (HMENU)IDC_BTN_SEARCH_PLAY, m_hInstance, NULL);
     SendMessage(m_hBtnSearchPlay, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnReset = CreateWindowEx(0, "BUTTON", "[ Reset",
+    m_hBtnReset = CreateWindowEx(0, "BUTTON", "Reset",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         350, 280, 45, 22, hwnd, (HMENU)IDC_BTN_RESET, m_hInstance, NULL);
     SendMessage(m_hBtnReset, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnPlusMinus = CreateWindowEx(0, "BUTTON", "+-]",
+    m_hBtnPlusMinus = CreateWindowEx(0, "BUTTON", "+/-",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         400, 280, 25, 22, hwnd, (HMENU)IDC_BTN_PLUSMINUS, m_hInstance, NULL);
     SendMessage(m_hBtnPlusMinus, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -481,33 +486,33 @@ void MainWindow::InitControls(HWND hwnd) {
     ListView_InsertColumn(m_hListViewComp, 2, &lvcC);
 
     lvcC.cx = 60;
-    lvcC.pszText = (LPSTR)"Ilość";
+    lvcC.pszText = (LPSTR)"Ilosc";
     ListView_InsertColumn(m_hListViewComp, 3, &lvcC);
 
     // Component Control Buttons
-    m_hBtnAddComp = CreateWindowEx(0, "BUTTON", "+ Dodaj]",
+    m_hBtnAddComp = CreateWindowEx(0, "BUTTON", "Dodaj",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         20, 645, 100, 30, hwnd, (HMENU)IDC_BTN_ADD_COMP, m_hInstance, NULL);
     SendMessage(m_hBtnAddComp, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnRemoveComp = CreateWindowEx(0, "BUTTON", "+ Usuń]",
+    m_hBtnRemoveComp = CreateWindowEx(0, "BUTTON", "Usun",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         130, 645, 100, 30, hwnd, (HMENU)IDC_BTN_REMOVE_COMP, m_hInstance, NULL);
     SendMessage(m_hBtnRemoveComp, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnMoveUp = CreateWindowEx(0, "BUTTON", "▲",
+    m_hBtnMoveUp = CreateWindowEx(0, "BUTTON", "^",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         370, 645, 35, 30, hwnd, (HMENU)IDC_BTN_MOVE_UP, m_hInstance, NULL);
     SendMessage(m_hBtnMoveUp, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hBtnMoveDown = CreateWindowEx(0, "BUTTON", "▼",
+    m_hBtnMoveDown = CreateWindowEx(0, "BUTTON", "v",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         415, 645, 35, 30, hwnd, (HMENU)IDC_BTN_MOVE_DOWN, m_hInstance, NULL);
     SendMessage(m_hBtnMoveDown, WM_SETFONT, (WPARAM)hFont, TRUE);
 
 
     // 3. RIGHT-HAND PANELS (Visualization & Params)
-    m_hGrpPodgladPlyty = CreateWindowEx(0, "BUTTON", "PODGLĄD PŁYTY",
+    m_hGrpPodgladPlyty = CreateWindowEx(0, "BUTTON", "PODGLAD PLYTY",
         WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
         470, 60, 600, 380, hwnd, NULL, m_hInstance, NULL);
     SendMessage(m_hGrpPodgladPlyty, WM_SETFONT, (WPARAM)hFontBold, TRUE);
@@ -524,7 +529,7 @@ void MainWindow::InitControls(HWND hwnd) {
     SendMessage(m_hGrpParametry, WM_SETFONT, (WPARAM)hFontBold, TRUE);
 
     // Left Columns inside Parametry
-    HWND hLabelPlyta = CreateWindowEx(0, "STATIC", "Płyta:",
+    HWND hLabelPlyta = CreateWindowEx(0, "STATIC", "Plyta:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         485, 483, 70, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelPlyta, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -534,7 +539,7 @@ void MainWindow::InitControls(HWND hwnd) {
         560, 480, 140, 22, hwnd, (HMENU)IDC_EDIT_PLATEW, m_hInstance, NULL);
     SendMessage(m_hEditPlateW, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    HWND hLabelMargin = CreateWindowEx(0, "STATIC", "Margines :",
+    HWND hLabelMargin = CreateWindowEx(0, "STATIC", "Margines:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         485, 513, 70, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelMargin, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -544,17 +549,17 @@ void MainWindow::InitControls(HWND hwnd) {
         560, 510, 140, 22, hwnd, (HMENU)IDC_EDIT_MARGIN, m_hInstance, NULL);
     SendMessage(m_hEditMargin, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    HWND hLabelSpacing = CreateWindowEx(0, "STATIC", "Odstęp:",
+    HWND hLabelSpacing = CreateWindowEx(0, "STATIC", "Odstep:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         485, 543, 70, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelSpacing, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    m_hEditSpacing = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", ":5 mm",
+    m_hEditSpacing = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "5 mm",
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
         560, 540, 140, 22, hwnd, (HMENU)IDC_EDIT_SPACING, m_hInstance, NULL);
     SendMessage(m_hEditSpacing, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    HWND hLabelObrot = CreateWindowEx(0, "STATIC", "Obrót:",
+    HWND hLabelObrot = CreateWindowEx(0, "STATIC", "Obrot:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         485, 573, 70, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelObrot, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -582,13 +587,23 @@ void MainWindow::InitControls(HWND hwnd) {
         695, 571, 45, 20, hwnd, (HMENU)IDC_CHK_ROT270, m_hInstance, NULL);
     SendMessage(m_hChkRot270, WM_SETFONT, (WPARAM)hFont, TRUE);
 
+    HWND hLabelKrok = CreateWindowEx(0, "STATIC", "Krok:",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        485, 603, 70, 20, hwnd, NULL, m_hInstance, NULL);
+    SendMessage(hLabelKrok, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    m_hEditAngleStep = CreateWindowEx(WS_EX_CLIENTEDGE, "EDIT", "0",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        560, 600, 140, 22, hwnd, (HMENU)IDC_EDIT_ANGLESTEP, m_hInstance, NULL);
+    SendMessage(m_hEditAngleStep, WM_SETFONT, (WPARAM)hFont, TRUE);
+
     // NC Parameters (Right half of parameters)
     HWND hLabelNC = CreateWindowEx(0, "STATIC", "NC:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         730, 483, 80, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelNC, WM_SETFONT, (WPARAM)hFontBold, TRUE);
 
-    HWND hLabelNarzedzie = CreateWindowEx(0, "STATIC", "Narzędzie:",
+    HWND hLabelNarzedzie = CreateWindowEx(0, "STATIC", "Narzedzie:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         730, 513, 80, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelNarzedzie, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -625,10 +640,10 @@ void MainWindow::InitControls(HWND hwnd) {
     int sbParts[] = { 200, 400, 700, 900, -1 };
     SendMessage(m_hStatusBar, SB_SETPARTS, 5, (LPARAM)sbParts);
     SendMessage(m_hStatusBar, SB_SETTEXT, 0, (LPARAM)"18 detali");
-    SendMessage(m_hStatusBar, SB_SETTEXT, 1, (LPARAM)"2 płyty");
+    SendMessage(m_hStatusBar, SB_SETTEXT, 1, (LPARAM)"2 plyty");
     SendMessage(m_hStatusBar, SB_SETTEXT, 2, (LPARAM)"Wykorzystanie 92.41%");
     SendMessage(m_hStatusBar, SB_SETTEXT, 3, (LPARAM)"Czas 1.82 s");
-    SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 wątków");
+    SendMessage(m_hStatusBar, SB_SETTEXT, 4, (LPARAM)"5 watkow");
 }
 
 void MainWindow::ResizeControls(int width, int height) {
@@ -704,7 +719,7 @@ void MainWindow::OnRemoveComponent() {
         m_compManager.removeComponent(idx);
         RefreshListView();
     } else {
-        MessageBox(m_hwnd, "Wybierz najpierw element z listy do usunięcia!", "Informacja", MB_OK | MB_ICONINFORMATION);
+        MessageBox(m_hwnd, "Wybierz najpierw element z listy do usuniecia!", "Informacja", MB_OK | MB_ICONINFORMATION);
     }
 }
 
@@ -730,9 +745,9 @@ void MainWindow::OnImportDXF() {
             dxfComp.quantity = 5; // Default quantity
             m_compManager.addComponent(dxfComp);
             RefreshListView();
-            MessageBox(m_hwnd, "Plik DXF zaimportowany pomyślnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
+            MessageBox(m_hwnd, "Plik DXF zaimportowany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
         } else {
-            MessageBox(m_hwnd, "Nie udało się zaimportować pliku DXF. Plik może być uszkodzony lub pusty.", "Błąd", MB_OK | MB_ICONERROR);
+            MessageBox(m_hwnd, "Nie udalo sie zaimportowac pliku DXF. Plik moze byc uszkodzony lub pusty.", "Blad", MB_OK | MB_ICONERROR);
         }
     }
 }
@@ -776,6 +791,9 @@ void MainWindow::OnRunNesting() {
     m_nestingParams.allowRot180 = (SendMessage(m_hChkRot180, BM_GETCHECK, 0, 0) == BST_CHECKED);
     m_nestingParams.allowRot270 = (SendMessage(m_hChkRot270, BM_GETCHECK, 0, 0) == BST_CHECKED);
 
+    GetWindowText(m_hEditAngleStep, buf, sizeof(buf));
+    m_nestingParams.angleStep = atof(buf);
+
     // Read NC parameters
     GetWindowText(m_hEditFeed, buf, sizeof(buf));
     m_ncParams.cuttingFeed = atof(buf);
@@ -792,8 +810,13 @@ void MainWindow::OnRunNesting() {
     EnableWindow(m_hBtnRemoveComp, FALSE);
     EnableWindow(m_hListViewComp, FALSE);
 
+    // Ensure any prior active calculation thread is joined cleanly before starting a new one
+    if (m_bgThread.joinable()) {
+        m_bgThread.join();
+    }
+
     // Execute performNesting on a separate background thread to keep Win32 GUI completely fluid
-    std::thread bgWorker([this]() {
+    m_bgThread = std::thread([this]() {
         auto start = std::chrono::high_resolution_clock::now();
 
         m_sheets = NestingEngine::performNesting(m_compManager.getComponents(), m_nestingParams);
@@ -805,9 +828,6 @@ void MainWindow::OnRunNesting() {
         // Notify GUI Thread of complete nesting
         PostMessage(m_hwnd, WM_NESTING_COMPLETE, 0, 0);
     });
-
-    // Detach worker thread so it executes independently and cleans up automatically upon termination
-    bgWorker.detach();
 }
 
 void MainWindow::OnExportGCode() {
@@ -841,9 +861,9 @@ void MainWindow::OnExportGCode() {
         std::ofstream outfile(szFile);
         if (outfile.is_open()) {
             outfile << gcode;
-            MessageBox(m_hwnd, "Plik G-kod wygenerowany i zapisany pomyślnie!", "Eksport CNC", MB_OK | MB_ICONINFORMATION);
+            MessageBox(m_hwnd, "Plik G-kod wygenerowany i zapisany pomyslnie!", "Eksport CNC", MB_OK | MB_ICONINFORMATION);
         } else {
-            MessageBox(m_hwnd, "Nie udało się zapisać pliku. Brak uprawnień do katalogu.", "Błąd zapisu", MB_OK | MB_ICONERROR);
+            MessageBox(m_hwnd, "Nie udalo sie zapisac pliku. Brak uprawnien do katalogu.", "Blad zapisu", MB_OK | MB_ICONERROR);
         }
     }
 }
@@ -911,13 +931,17 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
         // Draw components in stylized colors (Red, Blue, Gray) as shown in the mockup image
         int count = 0;
         for (const auto& comp : sheet.placedComponents) {
-            double ew = comp.getEffectiveWidth();
-            double eh = comp.getEffectiveHeight();
+            auto poly = comp.getFlattenedOuterPolygon();
+            if (poly.empty()) continue;
 
-            int sx = (int)(offX + comp.posX * scale);
-            int sy = (int)(offY + comp.posY * scale);
-            int sw = (int)(ew * scale);
-            int sh = (int)(eh * scale);
+            // Build GDI POINT array representing the actual outer polygonal contour
+            std::vector<POINT> pts;
+            for (const auto& p : poly) {
+                POINT gPt;
+                gPt.x = static_cast<long>(offX + (comp.posX + p.x) * scale);
+                gPt.y = static_cast<long>(offY + (comp.posY + p.y) * scale);
+                pts.push_back(gPt);
+            }
 
             // Assign block colors exactly as in the mock image (Blue, Red, Gray)
             COLORREF blockColor = RGB(220, 220, 220); // standard gray
@@ -933,10 +957,45 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
             SelectObject(memDC, compBrush);
             SelectObject(memDC, compPen);
 
-            Rectangle(memDC, sx, sy, sx + sw, sy + sh);
+            // Draw actual contour instead of bounding box
+            Polygon(memDC, pts.data(), static_cast<int>(pts.size()));
 
             DeleteObject(compBrush);
             DeleteObject(compPen);
+
+            // Render inner contours (holes) as dark cutouts
+            HBRUSH holeBrush = CreateSolidBrush(RGB(65, 65, 65)); // match sheet background color
+            HPEN holePen = CreatePen(PS_SOLID, 1, RGB(30, 30, 30));
+
+            SelectObject(memDC, holeBrush);
+            SelectObject(memDC, holePen);
+
+            double angle = comp.rotationAngle;
+            if (comp.rotated && angle == 0.0) angle = 90.0;
+
+            double minX = 1e30, minY = 1e30;
+            for (const auto& p : comp.outerContour) {
+                Point rp = Component::transformPoint(p, angle, Point(0, 0));
+                if (rp.x < minX) minX = rp.x;
+                if (rp.y < minY) minY = rp.y;
+            }
+
+            for (const auto& inner : comp.innerContours) {
+                std::vector<POINT> innerPts;
+                for (const auto& p : inner) {
+                    Point rp = Component::transformPoint(p, angle, Point(0, 0));
+                    POINT gPt;
+                    gPt.x = static_cast<long>(offX + (comp.posX + (rp.x - minX)) * scale);
+                    gPt.y = static_cast<long>(offY + (comp.posY + (rp.y - minY)) * scale);
+                    innerPts.push_back(gPt);
+                }
+                if (!innerPts.empty()) {
+                    Polygon(memDC, innerPts.data(), static_cast<int>(innerPts.size()));
+                }
+            }
+
+            DeleteObject(holeBrush);
+            DeleteObject(holePen);
 
             // Geometry pathways inside component
             HPEN pathPen = CreatePen(PS_SOLID, 1, RGB(30, 30, 30));

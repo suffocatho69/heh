@@ -90,6 +90,9 @@ private:
     HWND m_hChkRot180;
     HWND m_hChkRot270;
 
+    // Custom Angle Step edit box
+    HWND m_hEditAngleStep;
+
     // NC parameters
     HWND m_hComboTool;
     HWND m_hEditFeed;
@@ -109,6 +112,7 @@ private:
 
     // Thread safety flag for active calculation
     bool m_isNestingRunning;
+    std::thread m_bgThread;
 
     // Performance measurement
     double m_lastNestingTime;
