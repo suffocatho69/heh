@@ -60,7 +60,7 @@ private:
 
     // LEFT PANEL - BAZA DETALI
     HWND m_hGrpBazaDetali;
-    HWND m_hListViewDB;
+    HWND m_hTreeViewDB;
     HWND m_hEditSearch;
     HWND m_hBtnSearchPencil;
     HWND m_hBtnSearchPlay;

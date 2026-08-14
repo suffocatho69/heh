@@ -30,7 +30,7 @@
 #define IDC_TB_BTN_PDF          3110
 #define IDC_TB_BTN_ZIP          3111
 
-#define IDC_LIST_DB             4001
+#define IDC_TREE_DB             4001
 #define IDC_EDIT_SEARCH         4002
 #define IDC_BTN_SEARCH_PENCIL   4003
 #define IDC_BTN_SEARCH_PLAY     4004
@@ -72,7 +72,7 @@ const char g_szClassName[] = "Nesting2DMainWindowClass";
 
 MainWindow::MainWindow()
     : m_hwnd(NULL), m_hInstance(NULL), m_hMenu(NULL), m_hToolbar(NULL),
-      m_hGrpBazaDetali(NULL), m_hListViewDB(NULL), m_hEditSearch(NULL),
+      m_hGrpBazaDetali(NULL), m_hTreeViewDB(NULL), m_hEditSearch(NULL),
       m_hBtnSearchPencil(NULL), m_hBtnSearchPlay(NULL), m_hBtnReset(NULL),
       m_hBtnPlusMinus(NULL), m_hBtnScale(NULL), m_hGrpKomponenty(NULL),
       m_hListViewComp(NULL), m_hBtnAddComp(NULL), m_hBtnRemoveComp(NULL),
@@ -200,22 +200,47 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
     switch (uMsg) {
         case WM_NOTIFY: {
             LPNMHDR lpnmhdr = (LPNMHDR)lParam;
-            if (lpnmhdr->idFrom == IDC_LIST_DB && lpnmhdr->code == NM_DBLCLK) {
-                // Double click inside BazaDXF lists - load automatically into Components list!
-                int idx = ListView_GetNextItem(m_hListViewDB, -1, LVNI_SELECTED);
-                if (idx != -1) {
-                    char szName[260] = { 0 };
-                    ListView_GetItemText(m_hListViewDB, idx, 0, szName, sizeof(szName));
+            if (lpnmhdr->idFrom == IDC_TREE_DB && (lpnmhdr->code == NM_DBLCLK || lpnmhdr->code == TVN_SELCHANGED)) {
+                // Double click or selection change inside BazaDXF TreeView - load DXF file automatically!
+                HTREEITEM hItem = TreeView_GetSelection(m_hTreeViewDB);
+                if (hItem) {
+                    HTREEITEM hParent = TreeView_GetParent(m_hTreeViewDB, hItem);
+                    if (hParent) {
+                        // Node is a child file node!
+                        char szFileName[260] = { 0 };
+                        char szCatName[260] = { 0 };
 
-                    std::string fullPath = "BazaDXF/" + std::string(szName);
-                    Component dxfComp;
-                    if (DXFReader::loadDXF(fullPath, dxfComp)) {
-                        dxfComp.quantity = 5; // Default quantity
-                        m_compManager.addComponent(dxfComp);
-                        RefreshListView();
-                        MessageBox(hwnd, "Plik zaimportowany z bazy detali!", "Sukces", MB_OK | MB_ICONINFORMATION);
-                    } else {
-                        MessageBox(hwnd, "Nie udalo sie zaladowac wybranego pliku DXF.", "Blad", MB_OK | MB_ICONERROR);
+                        TVITEM tvi;
+                        ZeroMemory(&tvi, sizeof(tvi));
+                        tvi.hItem = hItem;
+                        tvi.mask = TVIF_TEXT;
+                        tvi.pszText = szFileName;
+                        tvi.cchTextMax = sizeof(szFileName);
+                        TreeView_GetItem(m_hTreeViewDB, &tvi);
+
+                        TVITEM tviP;
+                        ZeroMemory(&tviP, sizeof(tviP));
+                        tviP.hItem = hParent;
+                        tviP.mask = TVIF_TEXT;
+                        tviP.pszText = szCatName;
+                        tviP.cchTextMax = sizeof(szCatName);
+                        TreeView_GetItem(m_hTreeViewDB, &tviP);
+
+                        std::string catStr(szCatName);
+                        if (catStr.find("[Kat] ") == 0) {
+                            catStr = catStr.substr(6);
+                        }
+
+                        std::string fullPath = "BazaDXF/" + catStr + "/" + std::string(szFileName);
+                        Component dxfComp;
+                        if (DXFReader::loadDXF(fullPath, dxfComp)) {
+                            dxfComp.quantity = 5; // Default quantity
+                            m_compManager.addComponent(dxfComp);
+                            RefreshListView();
+                            if (lpnmhdr->code == NM_DBLCLK) {
+                                MessageBox(hwnd, "Plik zaimportowany z bazy detali!", "Sukces", MB_OK | MB_ICONINFORMATION);
+                            }
+                        }
                     }
                 }
             }
@@ -592,17 +617,18 @@ void MainWindow::InitControls(HWND hwnd) {
     lvc.pszText = (LPSTR)"Kategoria";
     ListView_InsertColumn(m_hListViewDB, 0, &lvc);
 
-    // Create BazaDXF directory on startup and scan it for real DXF browser support
+    // Create BazaDXF root and subdirectories on startup
     CreateDirectory("BazaDXF", NULL);
+    CreateDirectory("BazaDXF/Elementy", NULL);
+    CreateDirectory("BazaDXF/Meble", NULL);
+    CreateDirectory("BazaDXF/Fronty", NULL);
+    CreateDirectory("BazaDXF/Wlasne", NULL);
 
-    // Write sample mock DXFs only if they do not exist to prevent overwriting user modifications
+    // Pre-populate sample DXFs into subfolders if missing
     {
-        std::ifstream f1("BazaDXF/Bok_sample.dxf");
-        bool exists1 = f1.good();
-        f1.close();
-
-        if (!exists1) {
-            std::ofstream mock1("BazaDXF/Bok_sample.dxf");
+        std::ifstream f1("BazaDXF/Elementy/Bok_sample.dxf");
+        if (!f1.good()) {
+            std::ofstream mock1("BazaDXF/Elementy/Bok_sample.dxf");
             if (mock1.is_open()) {
                 mock1 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n400.0\n21\n0.0\n"
                       << "0\nLINE\n10\n400.0\n20\n0.0\n11\n400.0\n21\n300.0\n"
@@ -610,13 +636,11 @@ void MainWindow::InitControls(HWND hwnd) {
                       << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
             }
         }
+        f1.close();
 
-        std::ifstream f2("BazaDXF/Front_sample.dxf");
-        bool exists2 = f2.good();
-        f2.close();
-
-        if (!exists2) {
-            std::ofstream mock2("BazaDXF/Front_sample.dxf");
+        std::ifstream f2("BazaDXF/Fronty/Front_sample.dxf");
+        if (!f2.good()) {
+            std::ofstream mock2("BazaDXF/Fronty/Front_sample.dxf");
             if (mock2.is_open()) {
                 mock2 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n300.0\n21\n0.0\n"
                       << "0\nLINE\n10\n300.0\n20\n0.0\n11\n300.0\n21\n300.0\n"
@@ -624,35 +648,51 @@ void MainWindow::InitControls(HWND hwnd) {
                       << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
             }
         }
+        f2.close();
     }
 
-    // Scan BazaDXF directory for .dxf files
-    WIN32_FIND_DATA ffd;
-    HANDLE hFind = FindFirstFile("BazaDXF/*.dxf", &ffd);
-    int itemIdx = 0;
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            LVITEM lvi;
-            lvi.mask = LVIF_TEXT;
-            lvi.iItem = itemIdx;
-            lvi.iSubItem = 0;
-            lvi.pszText = ffd.cFileName;
-            ListView_InsertItem(m_hListViewDB, &lvi);
-            ListView_SetCheckState(m_hListViewDB, itemIdx, TRUE);
-            itemIdx++;
-        } while (FindNextFile(hFind, &ffd) != 0);
-        FindClose(hFind);
-    }
+    // Populate TreeView hierarchy
+    auto PopulateTree = [&](const std::string& filterQuery) {
+        TreeView_DeleteAllItems(m_hTreeViewDB);
 
-    if (itemIdx == 0) {
-        // Fallback placeholder
-        LVITEM lvi;
-        lvi.mask = LVIF_TEXT;
-        lvi.iItem = 0;
-        lvi.iSubItem = 0;
-        lvi.pszText = (LPSTR)"Brak plikow DXF w BazaDXF/";
-        ListView_InsertItem(m_hListViewDB, &lvi);
-    }
+        auto AddTreeItem = [](HWND hTree, const std::string& text, HTREEITEM hParent = TVI_ROOT) -> HTREEITEM {
+            TVINSERTSTRUCT tvis;
+            ZeroMemory(&tvis, sizeof(tvis));
+            tvis.hParent = hParent;
+            tvis.hInsertAfter = TVI_LAST;
+            tvis.item.mask = TVIF_TEXT;
+            tvis.item.pszText = (LPSTR)text.c_str();
+            return TreeView_InsertItem(hTree, &tvis);
+        };
+
+        std::string lowerFilter = filterQuery;
+        std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
+
+        const char* categories[] = { "Elementy", "Meble", "Fronty", "Wlasne" };
+        for (int i = 0; i < 4; ++i) {
+            std::string catName = categories[i];
+            HTREEITEM hCat = AddTreeItem(m_hTreeViewDB, "[Kat] " + catName, TVI_ROOT);
+
+            std::string searchPath = "BazaDXF/" + catName + "/*.dxf";
+            WIN32_FIND_DATA ffd;
+            HANDLE hFind = FindFirstFile(searchPath.c_str(), &ffd);
+            if (hFind != INVALID_HANDLE_VALUE) {
+                do {
+                    std::string fileName = ffd.cFileName;
+                    std::string lowerFileName = fileName;
+                    std::transform(lowerFileName.begin(), lowerFileName.end(), lowerFileName.begin(), ::tolower);
+
+                    if (lowerFilter.empty() || lowerFileName.find(lowerFilter) != std::string::npos) {
+                        AddTreeItem(m_hTreeViewDB, fileName, hCat);
+                    }
+                } while (FindNextFile(hFind, &ffd) != 0);
+                FindClose(hFind);
+            }
+            TreeView_Expand(m_hTreeViewDB, hCat, TVE_EXPAND);
+        }
+    };
+
+    PopulateTree("");
 
     // Search Box and buttons
     HWND hLabelSzukaj = CreateWindowEx(0, "STATIC", "Szukaj:",
@@ -892,7 +932,7 @@ void MainWindow::ResizeControls(int width, int height) {
 
         // Reposition left panel groupboxes and controls
         MoveWindow(m_hGrpBazaDetali, 10, 60, 450, 290, TRUE);
-        MoveWindow(m_hListViewDB, 20, 85, 430, 185, TRUE);
+        MoveWindow(m_hTreeViewDB, 20, 85, 430, 185, TRUE);
         MoveWindow(m_hEditSearch, 75, 280, 210, 22, TRUE);
         MoveWindow(m_hBtnSearchPencil, 290, 280, 25, 22, TRUE);
         MoveWindow(m_hBtnSearchPlay, 320, 280, 25, 22, TRUE);
