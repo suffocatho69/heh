@@ -74,6 +74,9 @@ static bool parseDXFStream(std::istream& in, Component& outComponent) {
     };
 
     std::string currentEntity = "";
+    bool inEntitiesSection = false;
+    bool hasSections = false;
+    bool expectingSectionName = false;
 
     // LWPOLYLINE parsing state
     std::vector<PolylineVertex> lwVertices;
@@ -220,37 +223,56 @@ static bool parseDXFStream(std::istream& in, Component& outComponent) {
         if (groupCode == "0") {
             finalizeCurrentEntity();
 
-            std::string prevEntity = currentEntity;
-            currentEntity = value;
+            if (value == "SECTION") {
+                hasSections = true;
+                inEntitiesSection = false;
+                expectingSectionName = true;
+                currentEntity = "";
+            } else if (value == "ENDSEC") {
+                inEntitiesSection = false;
+                expectingSectionName = false;
+                currentEntity = "";
+            } else if (value == "EOF") {
+                currentEntity = "";
+                break;
+            } else {
+                if (hasSections && !inEntitiesSection) {
+                    currentEntity = "";
+                } else {
+                    currentEntity = value;
 
-            // Reset temp variables
-            tx1 = ty1 = tx2 = ty2 = tRad = tSa = tEa = 0;
+                    // Reset temp variables
+                    tx1 = ty1 = tx2 = ty2 = tRad = tSa = tEa = 0;
 
-            if (currentEntity == "POLYLINE") {
-                inPolyline = true;
-                polyClosed = false;
-                polyVertices.clear();
-            } else if (currentEntity == "VERTEX" && inPolyline) {
-                PolylineVertex v;
-                polyVertices.push_back(v);
-            } else if (currentEntity == "SEQEND" && inPolyline) {
-                // Finalize polyline
-                if (!polyVertices.empty()) {
-                    for (size_t i = 0; i < polyVertices.size() - 1; ++i) {
-                        convertBulgeToArc(polyVertices[i].x, polyVertices[i].y, polyVertices[i+1].x, polyVertices[i+1].y, polyVertices[i].bulge, outComponent);
-                    }
-                    if (polyClosed) {
-                        convertBulgeToArc(polyVertices.back().x, polyVertices.back().y, polyVertices.front().x, polyVertices.front().y, polyVertices.back().bulge, outComponent);
+                    if (currentEntity == "POLYLINE") {
+                        inPolyline = true;
+                        polyClosed = false;
+                        polyVertices.clear();
+                    } else if (currentEntity == "VERTEX" && inPolyline) {
+                        PolylineVertex v;
+                        polyVertices.push_back(v);
+                    } else if (currentEntity == "SEQEND" && inPolyline) {
+                        // Finalize polyline
+                        if (!polyVertices.empty()) {
+                            for (size_t i = 0; i < polyVertices.size() - 1; ++i) {
+                                convertBulgeToArc(polyVertices[i].x, polyVertices[i].y, polyVertices[i+1].x, polyVertices[i+1].y, polyVertices[i].bulge, outComponent);
+                            }
+                            if (polyClosed) {
+                                convertBulgeToArc(polyVertices.back().x, polyVertices.back().y, polyVertices.front().x, polyVertices.front().y, polyVertices.back().bulge, outComponent);
+                            }
+                        }
+                        inPolyline = false;
+                        polyVertices.clear();
                     }
                 }
-                inPolyline = false;
-                polyVertices.clear();
-            } else if (value == "EOF") {
-                break;
             }
         } else {
-            // Parse group codes based on active entity
-            if (currentEntity == "LINE") {
+            if (expectingSectionName && groupCode == "2") {
+                inEntitiesSection = (value == "ENTITIES");
+                expectingSectionName = false;
+            } else if (!hasSections || inEntitiesSection) {
+                // Parse group codes based on active entity
+                if (currentEntity == "LINE") {
                 if (groupCode == "10") tx1 = std::stod(value);
                 else if (groupCode == "20") ty1 = std::stod(value);
                 else if (groupCode == "11") tx2 = std::stod(value);
@@ -299,6 +321,7 @@ static bool parseDXFStream(std::istream& in, Component& outComponent) {
                 else if (groupCode == "11") ellMx = std::stod(value);
                 else if (groupCode == "21") ellMy = std::stod(value);
                 else if (groupCode == "40") ellRatio = std::stod(value);
+            }
             }
         }
     }

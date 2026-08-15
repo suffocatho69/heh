@@ -72,6 +72,47 @@ void runDXFReaderTests() {
     assert(is_close(comp.geometry[0].x2, 100.0));
     assert(is_close(comp.geometry[0].y2, 0.0));
 
+    // Test multi-section DXF file containing HEADER, BLOCKS, ENTITIES, OBJECTS
+    std::string cadDXF =
+        "0\nSECTION\n"
+        "2\nHEADER\n"
+        "0\nLINE\n" // Should be ignored (inside HEADER)
+        "10\n999.0\n20\n999.0\n11\n888.0\n21\n888.0\n"
+        "0\nENDSEC\n"
+        "0\nSECTION\n"
+        "2\nBLOCKS\n"
+        "0\nBLOCK\n"
+        "0\nLINE\n" // Should be ignored (inside BLOCKS)
+        "10\n500.0\n20\n500.0\n11\n600.0\n21\n600.0\n"
+        "0\nARC\n" // Should be ignored (inside BLOCKS)
+        "10\n100.0\n20\n100.0\n40\n50.0\n50\n0.0\n51\n90.0\n"
+        "0\nENDBLK\n"
+        "0\nENDSEC\n"
+        "0\nSECTION\n"
+        "2\nENTITIES\n"
+        "0\nLINE\n" // True geometry 1
+        "10\n0.0\n20\n0.0\n11\n200.0\n21\n0.0\n"
+        "0\nLINE\n" // True geometry 2
+        "10\n200.0\n20\n0.0\n11\n200.0\n21\n100.0\n"
+        "0\nLINE\n" // True geometry 3
+        "10\n200.0\n20\n100.0\n11\n0.0\n21\n100.0\n"
+        "0\nLINE\n" // True geometry 4
+        "10\n0.0\n20\n100.0\n11\n0.0\n21\n0.0\n"
+        "0\nENDSEC\n"
+        "0\nSECTION\n"
+        "2\nOBJECTS\n"
+        "0\nLINE\n" // Should be ignored (inside OBJECTS)
+        "10\n777.0\n20\n777.0\n11\n666.0\n21\n666.0\n"
+        "0\nENDSEC\n"
+        "0\nEOF\n";
+
+    Component cadComp;
+    bool cadSuccess = DXFReader::loadDXFFromString(cadDXF, cadComp);
+    assert(cadSuccess);
+    assert(cadComp.geometry.size() == 4);
+    assert(is_close(cadComp.width, 200.0));
+    assert(is_close(cadComp.height, 100.0));
+
     std::cout << "[TEST] DXFReader tests passed successfully!\n";
 }
 
