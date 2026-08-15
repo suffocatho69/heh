@@ -10,6 +10,7 @@
 #include <chrono>
 #include <thread>
 #include <fstream>
+#include <algorithm>
 
 // Win32 Controls Identifiers
 #define IDC_MENU_PLIK_NEW       2001
@@ -605,18 +606,11 @@ void MainWindow::InitControls(HWND hwnd) {
         10, 60, 450, 310, hwnd, NULL, m_hInstance, NULL);
     SendMessage(m_hGrpBazaDetali, WM_SETFONT, (WPARAM)hFontBold, TRUE);
 
-    // Baza Detali Folder List with custom folders: Elementy, Meble, Fronty, Wlasne
-    m_hListViewDB = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, "",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_NOCOLUMNHEADER | LVS_SINGLESEL,
-        20, 85, 430, 185, hwnd, (HMENU)IDC_LIST_DB, m_hInstance, NULL);
-    SendMessage(m_hListViewDB, WM_SETFONT, (WPARAM)hFont, TRUE);
-    ListView_SetExtendedListViewStyle(m_hListViewDB, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES);
-
-    LVCOLUMN lvc;
-    lvc.mask = LVCF_TEXT | LVCF_WIDTH;
-    lvc.cx = 400;
-    lvc.pszText = (LPSTR)"Kategoria";
-    ListView_InsertColumn(m_hListViewDB, 0, &lvc);
+    // Baza Detali Folder Tree with custom folders: Elementy, Meble, Fronty, Wlasne
+    m_hTreeViewDB = CreateWindowEx(WS_EX_CLIENTEDGE, WC_TREEVIEW, "",
+        WS_CHILD | WS_VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS,
+        20, 85, 430, 185, hwnd, (HMENU)IDC_TREE_DB, m_hInstance, NULL);
+    SendMessage(m_hTreeViewDB, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     // Create BazaDXF root and subdirectories on startup
     CreateDirectory("BazaDXF", NULL);
