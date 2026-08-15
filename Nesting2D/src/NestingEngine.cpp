@@ -313,7 +313,6 @@ std::vector<SheetLayout> NestingEngine::performNesting(
     }
 
     // 2. Define standard multi-strategy sort passes
-    std::vector<NestingSolution> solutions;
 
     // Check allowed rotations (standard fast presets or custom step multiples)
     std::vector<int> allowedRotations;
@@ -630,14 +629,21 @@ std::vector<SheetLayout> NestingEngine::performNesting(
         return sol;
     };
 
-    // Parallelize execution using std::async across 7 hardware workers
-    std::vector<std::future<NestingSolution>> futures;
+    // Parallelize execution using std::thread across 7 hardware workers
+    std::vector<NestingSolution> solutions(7);
+    std::vector<std::thread> threads;
+    threads.reserve(7);
+
     for (int strategy = 0; strategy < 7; ++strategy) {
-        futures.push_back(std::async(std::launch::async, runStrategy, strategy));
+        threads.emplace_back([&, strategy]() {
+            solutions[strategy] = runStrategy(strategy);
+        });
     }
 
-    for (auto& fut : futures) {
-        solutions.push_back(fut.get());
+    for (auto& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
     }
 
     // 3. Selection of the absolute best result based on multi-level priority criteria

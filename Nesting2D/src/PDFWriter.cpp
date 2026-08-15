@@ -5,6 +5,17 @@
 #include <iomanip>
 #include <cmath>
 
+static std::string escapePDFString(const std::string& input) {
+    std::string res;
+    for (char c : input) {
+        if (c == '(' || c == ')' || c == '\\') {
+            res += '\\';
+        }
+        res += c;
+    }
+    return res;
+}
+
 bool PDFWriter::generatePDFReport(
     const std::string& filepath,
     const std::vector<SheetLayout>& sheets,
@@ -98,7 +109,7 @@ bool PDFWriter::generatePDFReport(
             }
             std::stringstream compLine;
             compLine << "  - Detal: " << c.name << " na (" << (int)c.posX << ", " << (int)c.posY << ") obrot: " << c.rotationAngle << " deg";
-            contentStream << "(" << compLine.str() << ") Tj T*\n";
+            contentStream << "(" << escapePDFString(compLine.str()) << ") Tj T*\n";
             count++;
         }
     }
