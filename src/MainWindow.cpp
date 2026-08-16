@@ -4,8 +4,6 @@
 #include "DXFWriter.h"
 #include "PDFWriter.h"
 #include "ZIPWriter.h"
-#include "NumUtil.h"
-#include "Project.h"
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -17,8 +15,6 @@
 // Win32 Controls Identifiers
 #define IDC_MENU_PLIK_NEW       2001
 #define IDC_MENU_PLIK_OPEN      2002
-#define IDC_MENU_PLIK_SAVE      2005
-#define IDC_MENU_PLIK_LOAD      2006
 #define IDC_MENU_PLIK_EXIT      2003
 #define IDC_MENU_POMOC_ABOUT    2004
 
@@ -124,8 +120,6 @@ bool MainWindow::Create(HINSTANCE hInstance, int nCmdShow) {
     HMENU hMenuPlik = CreatePopupMenu();
     AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_NEW, "Nowy");
     AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_OPEN, "Otworz...");
-    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_SAVE, "Zapisz projekt...");
-    AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_LOAD, "Wczytaj projekt...");
     AppendMenu(hMenuPlik, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenuPlik, MF_STRING, IDC_MENU_PLIK_EXIT, "Wyjdz");
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hMenuPlik, "Plik");
@@ -338,68 +332,6 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 case IDC_TB_BTN_OPEN:
                     OnImportDXF();
                     break;
-                case IDC_MENU_PLIK_SAVE: {
-                    OPENFILENAME ofn;
-                    char szFile[260] = "projekt_nesting.n2d";
-                    ZeroMemory(&ofn, sizeof(ofn));
-                    ofn.lStructSize = sizeof(ofn);
-                    ofn.hwndOwner = hwnd;
-                    ofn.lpstrFile = szFile;
-                    ofn.nMaxFile = sizeof(szFile);
-                    ofn.lpstrFilter = "Projekt Nesting2D (*.n2d)\0*.n2d\0Wszystkie Pliki (*.*)\0*.*\0";
-                    ofn.nFilterIndex = 1;
-                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
-
-                    if (GetSaveFileName(&ofn) == TRUE) {
-                        if (Project::saveProject(szFile, m_compManager.getComponents(), m_nestingParams, m_ncParams)) {
-                            MessageBox(hwnd, "Projekt zostal zapisany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
-                        } else {
-                            MessageBox(hwnd, "Nie udalo sie zapisac pliku projektu.", "Blad", MB_OK | MB_ICONERROR);
-                        }
-                    }
-                    break;
-                }
-                case IDC_MENU_PLIK_LOAD: {
-                    OPENFILENAME ofn;
-                    char szFile[260] = { 0 };
-                    ZeroMemory(&ofn, sizeof(ofn));
-                    ofn.lStructSize = sizeof(ofn);
-                    ofn.hwndOwner = hwnd;
-                    ofn.lpstrFile = szFile;
-                    ofn.nMaxFile = sizeof(szFile);
-                    ofn.lpstrFilter = "Projekt Nesting2D (*.n2d)\0*.n2d\0Wszystkie Pliki (*.*)\0*.*\0";
-                    ofn.nFilterIndex = 1;
-                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-                    if (GetOpenFileName(&ofn) == TRUE) {
-                        std::vector<Component> loadedComps;
-                        if (Project::loadProject(szFile, loadedComps, m_nestingParams, m_ncParams)) {
-                            m_compManager.clearAllComponents();
-                            for (const auto& c : loadedComps) {
-                                m_compManager.addComponent(c);
-                            }
-                            RefreshListView();
-
-                            // Update UI fields
-                            std::string plateStr = NumUtil::formatDouble(m_nestingParams.sheetWidth, 0) + " x " + NumUtil::formatDouble(m_nestingParams.sheetHeight, 0);
-                            SetWindowText(m_hEditPlateW, plateStr.c_str());
-                            SetWindowText(m_hEditMargin, (NumUtil::formatDouble(m_nestingParams.margin, 0) + " mm").c_str());
-                            SetWindowText(m_hEditSpacing, (NumUtil::formatDouble(m_nestingParams.spacing, 0) + " mm").c_str());
-                            SetWindowText(m_hEditAngleStep, NumUtil::formatDouble(m_nestingParams.angleStep, 0).c_str());
-                            SetWindowText(m_hEditFeed, NumUtil::formatDouble(m_ncParams.cuttingFeed, 0).c_str());
-
-                            SendMessage(m_hChkRot0, BM_SETCHECK, m_nestingParams.allowRot0 ? BST_CHECKED : BST_UNCHECKED, 0);
-                            SendMessage(m_hChkRot90, BM_SETCHECK, m_nestingParams.allowRot90 ? BST_CHECKED : BST_UNCHECKED, 0);
-                            SendMessage(m_hChkRot180, BM_SETCHECK, m_nestingParams.allowRot180 ? BST_CHECKED : BST_UNCHECKED, 0);
-                            SendMessage(m_hChkRot270, BM_SETCHECK, m_nestingParams.allowRot270 ? BST_CHECKED : BST_UNCHECKED, 0);
-
-                            MessageBox(hwnd, "Projekt zostal wczytany pomyslnie!", "Sukces", MB_OK | MB_ICONINFORMATION);
-                        } else {
-                            MessageBox(hwnd, "Nie udalo sie wczytac pliku projektu.", "Blad", MB_OK | MB_ICONERROR);
-                        }
-                    }
-                    break;
-                }
                 case IDC_TB_BTN_SHEETS:
                 case IDC_TB_BTN_DXF: {
                     if (m_sheets.empty()) {
@@ -1100,8 +1032,8 @@ void MainWindow::OnRunNesting() {
     std::string plateStr(buf);
     size_t xPos = plateStr.find('x');
     if (xPos != std::string::npos) {
-        m_nestingParams.sheetWidth = NumUtil::parseDouble(plateStr.substr(0, xPos));
-        m_nestingParams.sheetHeight = NumUtil::parseDouble(plateStr.substr(xPos + 1));
+        m_nestingParams.sheetWidth = atof(plateStr.substr(0, xPos).c_str());
+        m_nestingParams.sheetHeight = atof(plateStr.substr(xPos + 1).c_str());
     } else {
         m_nestingParams.sheetWidth = 3000.0;
         m_nestingParams.sheetHeight = 1500.0;
@@ -1111,15 +1043,15 @@ void MainWindow::OnRunNesting() {
     if (m_nestingParams.sheetHeight <= 0) m_nestingParams.sheetHeight = 1500.0;
 
     GetWindowText(m_hEditMargin, buf, sizeof(buf));
-    m_nestingParams.margin = NumUtil::parseDouble(buf);
+    m_nestingParams.margin = atof(buf);
     if (m_nestingParams.margin <= 0) m_nestingParams.margin = 10.0;
 
     GetWindowText(m_hEditSpacing, buf, sizeof(buf));
     std::string spacingStr(buf);
     if (!spacingStr.empty() && spacingStr.front() == ':') {
-        m_nestingParams.spacing = NumUtil::parseDouble(spacingStr.substr(1));
+        m_nestingParams.spacing = atof(spacingStr.substr(1).c_str());
     } else {
-        m_nestingParams.spacing = NumUtil::parseDouble(spacingStr);
+        m_nestingParams.spacing = atof(spacingStr.c_str());
     }
     if (m_nestingParams.spacing <= 0) m_nestingParams.spacing = 5.0;
 
@@ -1130,17 +1062,14 @@ void MainWindow::OnRunNesting() {
     m_nestingParams.allowRot270 = (SendMessage(m_hChkRot270, BM_GETCHECK, 0, 0) == BST_CHECKED);
 
     GetWindowText(m_hEditAngleStep, buf, sizeof(buf));
-    m_nestingParams.angleStep = NumUtil::parseDouble(buf);
+    m_nestingParams.angleStep = atof(buf);
 
     // Read NC parameters
     GetWindowText(m_hEditFeed, buf, sizeof(buf));
-    m_ncParams.cuttingFeed = NumUtil::parseDouble(buf);
+    m_ncParams.cuttingFeed = atof(buf);
     if (m_ncParams.cuttingFeed <= 0) m_ncParams.cuttingFeed = 1200.0;
 
     m_isNestingRunning = true;
-
-    // Save current parameters automatically to nesting_last_settings.ini
-    Project::saveLastSettings("nesting_last_settings.ini", m_nestingParams, m_ncParams);
 
     // Visual indicators during processing
     EnableWindow(m_hBtnGenerateNesting, FALSE);

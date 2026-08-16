@@ -1,5 +1,4 @@
 #include "DXFReader.h"
-#include "NumUtil.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -274,54 +273,54 @@ static bool parseDXFStream(std::istream& in, Component& outComponent) {
             } else if (!hasSections || inEntitiesSection) {
                 // Parse group codes based on active entity
                 if (currentEntity == "LINE") {
-                if (groupCode == "10") tx1 = NumUtil::parseDouble(value);
-                else if (groupCode == "20") ty1 = NumUtil::parseDouble(value);
-                else if (groupCode == "11") tx2 = NumUtil::parseDouble(value);
-                else if (groupCode == "21") ty2 = NumUtil::parseDouble(value);
+                if (groupCode == "10") tx1 = std::stod(value);
+                else if (groupCode == "20") ty1 = std::stod(value);
+                else if (groupCode == "11") tx2 = std::stod(value);
+                else if (groupCode == "21") ty2 = std::stod(value);
             } else if (currentEntity == "ARC") {
-                if (groupCode == "10") tx1 = NumUtil::parseDouble(value);
-                else if (groupCode == "20") ty1 = NumUtil::parseDouble(value);
-                else if (groupCode == "40") tRad = NumUtil::parseDouble(value);
-                else if (groupCode == "50") tSa = NumUtil::parseDouble(value);
-                else if (groupCode == "51") tEa = NumUtil::parseDouble(value);
+                if (groupCode == "10") tx1 = std::stod(value);
+                else if (groupCode == "20") ty1 = std::stod(value);
+                else if (groupCode == "40") tRad = std::stod(value);
+                else if (groupCode == "50") tSa = std::stod(value);
+                else if (groupCode == "51") tEa = std::stod(value);
             } else if (currentEntity == "CIRCLE") {
-                if (groupCode == "10") tx1 = NumUtil::parseDouble(value);
-                else if (groupCode == "20") ty1 = NumUtil::parseDouble(value);
-                else if (groupCode == "40") tRad = NumUtil::parseDouble(value);
+                if (groupCode == "10") tx1 = std::stod(value);
+                else if (groupCode == "20") ty1 = std::stod(value);
+                else if (groupCode == "40") tRad = std::stod(value);
             } else if (currentEntity == "LWPOLYLINE") {
                 if (groupCode == "10") {
                     PolylineVertex v;
-                    v.x = NumUtil::parseDouble(value);
+                    v.x = std::stod(value);
                     lwVertices.push_back(v);
                 } else if (groupCode == "20" && !lwVertices.empty()) {
-                    lwVertices.back().y = NumUtil::parseDouble(value);
+                    lwVertices.back().y = std::stod(value);
                 } else if (groupCode == "42" && !lwVertices.empty()) {
-                    lwVertices.back().bulge = NumUtil::parseDouble(value);
+                    lwVertices.back().bulge = std::stod(value);
                 } else if (groupCode == "70") {
-                    lwClosed = (NumUtil::parseInt(value) & 1);
+                    lwClosed = (std::stoi(value) & 1);
                 }
             } else if (currentEntity == "POLYLINE") {
                 if (groupCode == "70") {
-                    polyClosed = (NumUtil::parseInt(value) & 1);
+                    polyClosed = (std::stoi(value) & 1);
                 }
             } else if (currentEntity == "VERTEX" && inPolyline && !polyVertices.empty()) {
-                if (groupCode == "10") polyVertices.back().x = NumUtil::parseDouble(value);
-                else if (groupCode == "20") polyVertices.back().y = NumUtil::parseDouble(value);
-                else if (groupCode == "42") polyVertices.back().bulge = NumUtil::parseDouble(value);
+                if (groupCode == "10") polyVertices.back().x = std::stod(value);
+                else if (groupCode == "20") polyVertices.back().y = std::stod(value);
+                else if (groupCode == "42") polyVertices.back().bulge = std::stod(value);
             } else if (currentEntity == "SPLINE") {
                 if (groupCode == "10") {
                     Point p;
-                    p.x = NumUtil::parseDouble(value);
+                    p.x = std::stod(value);
                     splinePoints.push_back(p);
                 } else if (groupCode == "20" && !splinePoints.empty()) {
-                    splinePoints.back().y = NumUtil::parseDouble(value);
+                    splinePoints.back().y = std::stod(value);
                 }
             } else if (currentEntity == "ELLIPSE") {
-                if (groupCode == "10") ellCx = NumUtil::parseDouble(value);
-                else if (groupCode == "20") ellCy = NumUtil::parseDouble(value);
-                else if (groupCode == "11") ellMx = NumUtil::parseDouble(value);
-                else if (groupCode == "21") ellMy = NumUtil::parseDouble(value);
-                else if (groupCode == "40") ellRatio = NumUtil::parseDouble(value);
+                if (groupCode == "10") ellCx = std::stod(value);
+                else if (groupCode == "20") ellCy = std::stod(value);
+                else if (groupCode == "11") ellMx = std::stod(value);
+                else if (groupCode == "21") ellMy = std::stod(value);
+                else if (groupCode == "40") ellRatio = std::stod(value);
             }
             }
         }

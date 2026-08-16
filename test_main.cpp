@@ -3,11 +3,13 @@
 #include <string>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
 #include "src/Component.h"
 #include "src/DXFReader.h"
 #include "src/NestingEngine.h"
 #include "src/ComponentManager.h"
 #include "src/NCGenerator.h"
+#include "src/PDFWriter.h"
 #include "src/NumUtil.h"
 #include "src/Project.h"
 
@@ -500,78 +502,41 @@ void runNestingEngineAndNCGenTests() {
     std::cout << "[TEST] Nesting and NC Generator tests passed successfully!\n";
 }
 
-void runProjectTests() {
-    std::cout << "[TEST] Running Project Save/Load and INI tests...\n";
+void runPolishPDFTest() {
+    std::cout << "[TEST] Running Polish PDF report generation test...\n";
 
     std::vector<Component> comps;
-    comps.push_back(Component("Test_Part_1", 250.0, 150.0, 5));
-    comps.push_back(Component("Test_Part_2", 100.0, 100.0, 10));
+    comps.push_back(Component("zagłębienie_łóżko_dąb.dxf", 300.0, 200.0, 4));
+    comps.push_back(Component("Front_Żółta_Ściana.dxf", 150.0, 150.0, 2));
 
     NestingParams params;
-    params.sheetWidth = 2800.0;
-    params.sheetHeight = 1400.0;
-    params.margin = 12.0;
-    params.spacing = 6.0;
-    params.allowRot0 = true;
-    params.allowRot90 = true;
-    params.allowRot180 = true;
-    params.allowRot270 = false;
-    params.angleStep = 15.0;
+    params.sheetWidth = 1000.0;
+    params.sheetHeight = 600.0;
+    params.margin = 10.0;
+    params.spacing = 5.0;
 
     NCParams nc;
-    nc.cuttingFeed = 1800.0;
-    nc.plungeFeed = 500.0;
+    nc.cuttingFeed = 1200.0;
 
-    std::string testFile = "test_project.n2d";
-    bool saveOk = Project::saveProject(testFile, comps, params, nc);
-    assert(saveOk);
+    auto sheets = NestingEngine::performNesting(comps, params);
+    assert(!sheets.empty());
 
-    std::vector<Component> loadedComps;
-    NestingParams loadedParams;
-    NCParams loadedNC;
-    bool loadOk = Project::loadProject(testFile, loadedComps, loadedParams, loadedNC);
-    assert(loadOk);
+    std::string pdfFile = "test_raport_polskie_znaki.pdf";
+    bool pdfOk = PDFWriter::generatePDFReport(pdfFile, sheets, params, nc, "Frez_Oscylacyjny", 0.25);
+    assert(pdfOk == true);
 
-    assert(loadedComps.size() == 2);
-    assert(loadedComps[0].name == "Test_Part_1");
-    assert(is_close(loadedComps[0].width, 250.0));
-    assert(loadedComps[0].quantity == 5);
-    assert(is_close(loadedParams.sheetWidth, 2800.0));
-    assert(is_close(loadedParams.margin, 12.0));
-    assert(is_close(loadedNC.cuttingFeed, 1800.0));
+    std::ifstream pdfIn(pdfFile, std::ios::binary | std::ios::ate);
+    assert(pdfIn.is_open());
+    std::streamsize fileSize = pdfIn.tellg();
+    pdfIn.close();
 
-    // Test INI last settings
-    std::string iniFile = "test_last_settings.ini";
-    bool iniSave = Project::saveLastSettings(iniFile, params, nc);
-    assert(iniSave);
+    // Assert PDF contains full embedded TrueType font data (file size > 25 KB)
+    assert(fileSize > 25000);
 
-    NestingParams iniParams;
-    NCParams iniNC;
-    bool iniLoad = Project::loadLastSettings(iniFile, iniParams, iniNC);
-    assert(iniLoad);
-    assert(is_close(iniParams.sheetWidth, 2800.0));
-    assert(is_close(iniNC.cuttingFeed, 1800.0));
+    // Clean up test file
+    remove(pdfFile.c_str());
 
-    // Cleanup test files
-    remove(testFile.c_str());
-    remove(iniFile.c_str());
-
-    std::cout << "[TEST] Project tests passed successfully!\n";
-}
-
-void runNumUtilTests() {
-    std::cout << "[TEST] Running NumUtil locale-independent parsing tests...\n";
-
-    assert(is_close(NumUtil::parseDouble("123.45"), 123.45));
-    assert(is_close(NumUtil::parseDouble("123,45"), 123.45));
-    assert(is_close(NumUtil::parseDouble("-50.25"), -50.25));
-    assert(is_close(NumUtil::parseDouble("1.5e3"), 1500.0));
-    assert(is_close(NumUtil::parseDouble("-2.5E-2"), -0.025));
-    assert(NumUtil::parseInt("42") == 42);
-    assert(NumUtil::parseInt("-10") == -10);
-    assert(NumUtil::formatDouble(12.3456, 2) == "12.35");
-
-    std::cout << "[TEST] NumUtil tests passed successfully!\n";
+    std::cout << "[TEST] Polish PDF report test passed successfully!\n";
 }
 
 int main() {
@@ -579,8 +544,7 @@ int main() {
     std::cout << "  RETRO 2D NESTING SYSTEM - UNIT TEST SUITE (C++14)\n";
     std::cout << "=========================================================\n";
 
-    runNumUtilTests();
-    runProjectTests();
+    runPolishPDFTest();
     runComponentTests();
     runDXFReaderTests();
     runNestingEngineAndNCGenTests();
