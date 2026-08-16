@@ -20,7 +20,9 @@ SRCS = $(SRC_DIR)/Component.cpp \
        $(SRC_DIR)/ZIPWriter.cpp \
        $(SRC_DIR)/NestingEngine.cpp \
        $(SRC_DIR)/ComponentManager.cpp \
-       $(SRC_DIR)/NCGenerator.cpp
+       $(SRC_DIR)/NCGenerator.cpp \
+       $(SRC_DIR)/NumUtil.cpp \
+       $(SRC_DIR)/Project.cpp
 
 # Output binary names
 TEST_BIN = test_suite

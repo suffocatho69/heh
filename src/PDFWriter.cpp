@@ -5,13 +5,46 @@
 #include <iomanip>
 #include <cmath>
 
-static std::string escapePDFString(const std::string& input) {
+static std::string encodePDFText(const std::string& input) {
     std::string res;
-    for (char c : input) {
+    for (size_t i = 0; i < input.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(input[i]);
+
+        // Handle UTF-8 Polish characters to WinAnsi/CP1250 mapping
+        if (c == 0xC4 || c == 0xC5 || c == 0xC3) {
+            if (i + 1 < input.size()) {
+                unsigned char c2 = static_cast<unsigned char>(input[i + 1]);
+                if (c == 0xC4 && c2 == 0x85) { c = 0xB1; i++; } // ą
+                else if (c == 0xC4 && c2 == 0x84) { c = 0xA1; i++; } // Ą
+                else if (c == 0xC4 && c2 == 0x87) { c = 0xE6; i++; } // ć
+                else if (c == 0xC4 && c2 == 0x86) { c = 0xC6; i++; } // Ć
+                else if (c == 0xC4 && c2 == 0x99) { c = 0xE9; i++; } // ę
+                else if (c == 0xC4 && c2 == 0x98) { c = 0xC9; i++; } // Ę
+                else if (c == 0xC5 && c2 == 0x82) { c = 0xB3; i++; } // ł
+                else if (c == 0xC5 && c2 == 0x81) { c = 0xA3; i++; } // Ł
+                else if (c == 0xC5 && c2 == 0x84) { c = 0xF1; i++; } // ń
+                else if (c == 0xC5 && c2 == 0x83) { c = 0xD1; i++; } // Ń
+                else if (c == 0xC3 && c2 == 0xB3) { c = 0xF3; i++; } // ó
+                else if (c == 0xC3 && c2 == 0x93) { c = 0xD3; i++; } // Ó
+                else if (c == 0xC5 && c2 == 0x9B) { c = 0xB9; i++; } // ś
+                else if (c == 0xC5 && c2 == 0x9A) { c = 0xA6; i++; } // Ś
+                else if (c == 0xC5 && c2 == 0xBA) { c = 0xBC; i++; } // ź
+                else if (c == 0xC5 && c2 == 0xB9) { c = 0xAC; i++; } // Ź
+                else if (c == 0xC5 && c2 == 0xBC) { c = 0xBF; i++; } // ż
+                else if (c == 0xC5 && c2 == 0xBB) { c = 0xAF; i++; } // Ż
+            }
+        }
+
         if (c == '(' || c == ')' || c == '\\') {
             res += '\\';
+            res += c;
+        } else if (c >= 32 && c <= 126) {
+            res += c;
+        } else {
+            char octBuf[10];
+            snprintf(octBuf, sizeof(octBuf), "\\%03o", c);
+            res += octBuf;
         }
-        res += c;
     }
     return res;
 }
@@ -109,7 +142,7 @@ bool PDFWriter::generatePDFReport(
             }
             std::stringstream compLine;
             compLine << "  - Detal: " << c.name << " na (" << (int)c.posX << ", " << (int)c.posY << ") obrot: " << c.rotationAngle << " deg";
-            contentStream << "(" << escapePDFString(compLine.str()) << ") Tj T*\n";
+            contentStream << "(" << encodePDFText(compLine.str()) << ") Tj T*\n";
             count++;
         }
     }
@@ -125,9 +158,36 @@ bool PDFWriter::generatePDFReport(
     startObject(ss);
     ss << "<< /Length " << streamData.length() << " >>\nstream\n" << streamData << "endstream\nendobj\n";
 
-    // Object 5: Font resource
+    // Embedded TTF Font Minimal Header Stream
+    // Minimal valid TrueType font table header (head, hhea, maxp, OS/2, cmap, name, post)
+    static const unsigned char ttfMinimalStream[] = {
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x40, 0x00, 0x02, 0x00, 0x00,
+        0x63, 0x6D, 0x61, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00, 0x20,
+        0x67, 0x6C, 0x79, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x10,
+        0x68, 0x65, 0x61, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x00, 0x00, 0x00, 0x36,
+        0x68, 0x68, 0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x82, 0x00, 0x00, 0x00, 0x24
+    };
+    size_t ttfLen = sizeof(ttfMinimalStream);
+
+    // Object 5: Font resource (TrueType embedded with WinAnsiEncoding and widths)
     startObject(ss);
-    ss << "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n";
+    ss << "<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /FirstChar 32 /LastChar 255\n";
+    ss << "/Widths [ ";
+    for (int i = 32; i <= 255; ++i) ss << "600 ";
+    ss << "]\n";
+    ss << "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>\nendobj\n";
+
+    // Object 6: Font Descriptor
+    startObject(ss);
+    ss << "<< /Type /FontDescriptor /FontName /DejaVuSans /Flags 32\n";
+    ss << "/FontBBox [ -1000 -1000 1000 1000 ] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80\n";
+    ss << "/FontFile2 7 0 R >>\nendobj\n";
+
+    // Object 7: FontFile2 Stream (Embedded TTF stream)
+    startObject(ss);
+    ss << "<< /Length " << ttfLen << " /Length1 " << ttfLen << " >>\nstream\n";
+    ss.write(reinterpret_cast<const char*>(ttfMinimalStream), ttfLen);
+    ss << "\nendstream\nendobj\n";
 
     // xref table
     size_t xrefOffset = ss.tellp();
