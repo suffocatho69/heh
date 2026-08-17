@@ -41,6 +41,7 @@ private:
     void OnRunNesting();
     void OnExportGCode();
     void OnPaintCanvas(HWND hwnd, HDC hdc);
+    void OnCanvasContextMenu(POINT ptScreen, int mouseX, int mouseY);
 
     // Redraw and recalculate UI layout size/positions
     void ResizeControls(int width, int height);
@@ -79,6 +80,14 @@ private:
     // RIGHT PANEL - PODGLAD PLYTY
     HWND m_hGrpPodgladPlyty;
     HWND m_hCanvas;
+    HWND m_hBtnResetZoom;
+
+    // Canvas Pan & Zoom State
+    double m_panOffsetX;
+    double m_panOffsetY;
+    double m_zoomFactor;
+    bool m_isPanning;
+    POINT m_lastMousePos;
 
     // Path simulation slider
     HWND m_hSlider;

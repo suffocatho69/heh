@@ -5,9 +5,9 @@ Type=0
 Ver=2
 ObjFiles=
 Defs=
-Compiler=
-CppCompiler=
-Linker=-mwindows_@@_-lcomctl32_@@_-lgdi32_@@_-lpthread_@@_
+Compiler=-std=c++14 -pthread_@@_
+CppCompiler=-std=c++14 -pthread_@@_
+Linker=-mwindows_@@_-lcomctl32_@@_-lgdi32_@@_-lpthread_@@_-lstdc++_@@_
 IsCtxApp=1
 CompilerType=0
 UnitCount=20

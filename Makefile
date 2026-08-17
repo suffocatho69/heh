@@ -6,7 +6,7 @@
 
 CXX = g++
 CXXFLAGS = -std=c++14 -O2 -Wall -Wextra -pthread
-LIBS = -lpthread
+LIBS = -lpthread -lstdc++
 
 # Target directories
 SRC_DIR = src
@@ -32,7 +32,7 @@ GUI_BIN = Nesting2D.exe
 # Cross compilation setup (if requested)
 WIN_CXX = i686-w64-mingw32-g++
 WIN_RC  = i686-w64-mingw32-windres
-WIN_LIBS = -mwindows -lcomctl32 -lgdi32 -lpthread
+WIN_LIBS = -mwindows -lcomctl32 -lgdi32 -lpthread -lstdc++
 
 .PHONY: all test clean win32
 

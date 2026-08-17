@@ -57,6 +57,10 @@
 #define IDC_CHK_ROT270          7008
 #define IDC_EDIT_ANGLESTEP      7015
 #define IDC_SLIDER              7020
+#define IDC_BTN_RESET_ZOOM      7021
+#define IDC_CTX_REMOVE_PART     9001
+#define IDC_CTX_MOVE_SHEET      9002
+#define IDC_CTX_NEW_SHEET       9003
 #define IDC_COMBO_TOOL          7009
 #define IDC_EDIT_FEED           7010
 #define IDC_BTN_GENERATE_NESTING 7011
@@ -78,11 +82,14 @@ MainWindow::MainWindow()
       m_hBtnPlusMinus(NULL), m_hBtnScale(NULL), m_hGrpKomponenty(NULL),
       m_hListViewComp(NULL), m_hBtnAddComp(NULL), m_hBtnRemoveComp(NULL),
       m_hBtnMoveUp(NULL), m_hBtnMoveDown(NULL), m_hGrpPodgladPlyty(NULL),
-      m_hCanvas(NULL), m_hSlider(NULL), m_simPercent(0), m_hGrpParametry(NULL), m_hEditPlateW(NULL),
+      m_hCanvas(NULL), m_hBtnResetZoom(NULL), m_panOffsetX(0.0), m_panOffsetY(0.0), m_zoomFactor(1.0),
+      m_isPanning(false), m_hSlider(NULL), m_simPercent(0), m_hGrpParametry(NULL), m_hEditPlateW(NULL),
       m_hEditMargin(NULL), m_hEditSpacing(NULL), m_hChkRot0(NULL), m_hChkRot90(NULL),
       m_hChkRot180(NULL), m_hChkRot270(NULL), m_hEditAngleStep(NULL), m_hComboTool(NULL), m_hEditFeed(NULL),
       m_hBtnGenerateNesting(NULL), m_hStatusBar(NULL), m_activeSheetIndex(-1),
       m_isNestingRunning(false), m_lastNestingTime(0.0) {
+    m_lastMousePos.x = 0;
+    m_lastMousePos.y = 0;
 
     // Seed database items and components for "Nestingator3000" visual styling
     m_compManager.addComponent(Component("Bok.dxf", 600.0, 300.0, 2));
@@ -179,6 +186,76 @@ int MainWindow::Run() {
     return static_cast<int>(Msg.wParam);
 }
 
+static WNDPROC g_pfnOldCanvasProc = NULL;
+
+static LRESULT CALLBACK CanvasSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    HWND hMain = GetParent(hwnd);
+    MainWindow* pMain = (MainWindow*)GetWindowLongPtr(hMain, GWLP_USERDATA);
+
+    switch (uMsg) {
+        case WM_RBUTTONDOWN: {
+            SetCapture(hwnd);
+            if (pMain) {
+                pMain->m_isPanning = true;
+                pMain->m_lastMousePos.x = LOWORD(lParam);
+                pMain->m_lastMousePos.y = HIWORD(lParam);
+            }
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (pMain && pMain->m_isPanning) {
+                int mouseX = LOWORD(lParam);
+                int mouseY = HIWORD(lParam);
+                int dx = mouseX - pMain->m_lastMousePos.x;
+                int dy = mouseY - pMain->m_lastMousePos.y;
+
+                pMain->m_panOffsetX += dx;
+                pMain->m_panOffsetY += dy;
+
+                pMain->m_lastMousePos.x = mouseX;
+                pMain->m_lastMousePos.y = mouseY;
+
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            break;
+        }
+        case WM_RBUTTONUP: {
+            if (pMain && pMain->m_isPanning) {
+                ReleaseCapture();
+                pMain->m_isPanning = false;
+
+                int mouseX = LOWORD(lParam);
+                int mouseY = HIWORD(lParam);
+
+                POINT ptScreen;
+                ptScreen.x = mouseX;
+                ptScreen.y = mouseY;
+                ClientToScreen(hwnd, &ptScreen);
+
+                if (pMain) {
+                    pMain->OnCanvasContextMenu(ptScreen, mouseX, mouseY);
+                }
+            }
+            return 0;
+        }
+        case WM_MOUSEWHEEL: {
+            if (pMain) {
+                short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+                if (zDelta > 0) {
+                    pMain->m_zoomFactor *= 1.15;
+                    if (pMain->m_zoomFactor > 5.0) pMain->m_zoomFactor = 5.0;
+                } else if (zDelta < 0) {
+                    pMain->m_zoomFactor /= 1.15;
+                    if (pMain->m_zoomFactor < 0.2) pMain->m_zoomFactor = 0.2;
+                }
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            return 0;
+        }
+    }
+    return CallWindowProc(g_pfnOldCanvasProc, hwnd, uMsg, wParam, lParam);
+}
+
 LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     MainWindow* pThis = NULL;
 
@@ -211,28 +288,28 @@ LRESULT MainWindow::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                         char szFileName[260] = { 0 };
                         char szCatName[260] = { 0 };
 
-                        TVITEM tvi;
-                        ZeroMemory(&tvi, sizeof(tvi));
-                        tvi.hItem = hItem;
-                        tvi.mask = TVIF_TEXT;
-                        tvi.pszText = szFileName;
-                        tvi.cchTextMax = sizeof(szFileName);
-                        TreeView_GetItem(m_hTreeViewDB, &tvi);
-
-                        TVITEM tviP;
-                        ZeroMemory(&tviP, sizeof(tviP));
-                        tviP.hItem = hParent;
-                        tviP.mask = TVIF_TEXT;
-                        tviP.pszText = szCatName;
-                        tviP.cchTextMax = sizeof(szCatName);
-                        TreeView_GetItem(m_hTreeViewDB, &tviP);
-
-                        std::string catStr(szCatName);
-                        if (catStr.find("[Kat] ") == 0) {
-                            catStr = catStr.substr(6);
+                        std::vector<std::string> pathParts;
+                        HTREEITEM curr = hItem;
+                        while (curr != NULL) {
+                            char szText[260] = { 0 };
+                            TVITEM tvi;
+                            ZeroMemory(&tvi, sizeof(tvi));
+                            tvi.hItem = curr;
+                            tvi.mask = TVIF_TEXT;
+                            tvi.pszText = szText;
+                            tvi.cchTextMax = sizeof(szText);
+                            if (TreeView_GetItem(m_hTreeViewDB, &tvi)) {
+                                std::string nodeText(szText);
+                                if (nodeText.find("[Kat] ") == 0) nodeText = nodeText.substr(6);
+                                pathParts.push_back(nodeText);
+                            }
+                            curr = TreeView_GetParent(m_hTreeViewDB, curr);
                         }
 
-                        std::string fullPath = "BazaDXF/" + catStr + "/" + std::string(szFileName);
+                        std::string fullPath = "BazaDXF";
+                        for (int i = static_cast<int>(pathParts.size()) - 1; i >= 0; --i) {
+                            fullPath += "/" + pathParts[i];
+                        }
                         Component dxfComp;
                         if (DXFReader::loadDXF(fullPath, dxfComp)) {
                             dxfComp.quantity = 5; // Default quantity
@@ -612,39 +689,8 @@ void MainWindow::InitControls(HWND hwnd) {
         20, 85, 430, 185, hwnd, (HMENU)IDC_TREE_DB, m_hInstance, NULL);
     SendMessage(m_hTreeViewDB, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    // Create BazaDXF root and subdirectories on startup
+    // Create root BazaDXF folder on startup
     CreateDirectory("BazaDXF", NULL);
-    CreateDirectory("BazaDXF/Elementy", NULL);
-    CreateDirectory("BazaDXF/Meble", NULL);
-    CreateDirectory("BazaDXF/Fronty", NULL);
-    CreateDirectory("BazaDXF/Wlasne", NULL);
-
-    // Pre-populate sample DXFs into subfolders if missing
-    {
-        std::ifstream f1("BazaDXF/Elementy/Bok_sample.dxf");
-        if (!f1.good()) {
-            std::ofstream mock1("BazaDXF/Elementy/Bok_sample.dxf");
-            if (mock1.is_open()) {
-                mock1 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n400.0\n21\n0.0\n"
-                      << "0\nLINE\n10\n400.0\n20\n0.0\n11\n400.0\n21\n300.0\n"
-                      << "0\nLINE\n10\n400.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
-                      << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
-            }
-        }
-        f1.close();
-
-        std::ifstream f2("BazaDXF/Fronty/Front_sample.dxf");
-        if (!f2.good()) {
-            std::ofstream mock2("BazaDXF/Fronty/Front_sample.dxf");
-            if (mock2.is_open()) {
-                mock2 << "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0.0\n20\n0.0\n11\n300.0\n21\n0.0\n"
-                      << "0\nLINE\n10\n300.0\n20\n0.0\n11\n300.0\n21\n300.0\n"
-                      << "0\nLINE\n10\n300.0\n20\n300.0\n11\n0.0\n21\n300.0\n"
-                      << "0\nLINE\n10\n0.0\n20\n300.0\n11\n0.0\n21\n0.0\n0\nEOF\n";
-            }
-        }
-        f2.close();
-    }
 
     // Populate TreeView hierarchy with ImageList icons
     HIMAGELIST hImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 3, 3);
@@ -676,28 +722,37 @@ void MainWindow::InitControls(HWND hwnd) {
         std::string lowerFilter = filterQuery;
         std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
 
-        const char* categories[] = { "Elementy", "Meble", "Fronty", "Wlasne" };
-        for (int i = 0; i < 4; ++i) {
-            std::string catName = categories[i];
-            HTREEITEM hCat = AddTreeItem(m_hTreeViewDB, "[Kat] " + catName, TVI_ROOT, 0, 1);
-
-            std::string searchPath = "BazaDXF/" + catName + "/*.dxf";
+        // Recursive dynamic scanner helper
+        std::function<void(const std::string&, HTREEITEM)> scanDir = [&](const std::string& dirPath, HTREEITEM parentNode) {
+            std::string searchPath = dirPath + "/*";
             WIN32_FIND_DATA ffd;
             HANDLE hFind = FindFirstFile(searchPath.c_str(), &ffd);
             if (hFind != INVALID_HANDLE_VALUE) {
                 do {
-                    std::string fileName = ffd.cFileName;
-                    std::string lowerFileName = fileName;
-                    std::transform(lowerFileName.begin(), lowerFileName.end(), lowerFileName.begin(), ::tolower);
+                    std::string itemTitle = ffd.cFileName;
+                    if (itemTitle == "." || itemTitle == "..") continue;
 
-                    if (lowerFilter.empty() || lowerFileName.find(lowerFilter) != std::string::npos) {
-                        AddTreeItem(m_hTreeViewDB, fileName, hCat, 2, 2);
+                    std::string itemFullPath = dirPath + "/" + itemTitle;
+
+                    if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                        HTREEITEM dirNode = AddTreeItem(m_hTreeViewDB, "[Kat] " + itemTitle, parentNode, 0, 1);
+                        scanDir(itemFullPath, dirNode);
+                        TreeView_Expand(m_hTreeViewDB, dirNode, TVE_EXPAND);
+                    } else {
+                        std::string lowerName = itemTitle;
+                        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                        if (lowerName.size() >= 4 && lowerName.substr(lowerName.size() - 4) == ".dxf") {
+                            if (lowerFilter.empty() || lowerName.find(lowerFilter) != std::string::npos) {
+                                AddTreeItem(m_hTreeViewDB, itemTitle, parentNode, 2, 2);
+                            }
+                        }
                     }
                 } while (FindNextFile(hFind, &ffd) != 0);
                 FindClose(hFind);
             }
-            TreeView_Expand(m_hTreeViewDB, hCat, TVE_EXPAND);
-        }
+        };
+
+        scanDir("BazaDXF", TVI_ROOT);
     };
 
     PopulateTree("");
@@ -798,6 +853,13 @@ void MainWindow::InitControls(HWND hwnd) {
     m_hCanvas = CreateWindowEx(WS_EX_CLIENTEDGE, "STATIC", "",
         WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
         485, 85, 570, 330, hwnd, (HMENU)IDC_CANVAS, m_hInstance, NULL);
+
+    g_pfnOldCanvasProc = (WNDPROC)SetWindowLongPtr(m_hCanvas, GWLP_WNDPROC, (LONG_PTR)CanvasSubclassProc);
+
+    m_hBtnResetZoom = CreateWindowEx(0, "BUTTON", "Reset Zoom",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        970, 60, 85, 22, hwnd, (HMENU)IDC_BTN_RESET_ZOOM, m_hInstance, NULL);
+    SendMessage(m_hBtnResetZoom, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     // Trackbar horizontal slider for path simulation animation
     m_hSlider = CreateWindowEx(0, TRACKBAR_CLASS, "Symulacja",
@@ -1159,6 +1221,95 @@ void MainWindow::OnExportGCode() {
     }
 }
 
+void MainWindow::OnCanvasContextMenu(POINT ptScreen, int mouseX, int mouseY) {
+    if (m_isNestingRunning || m_activeSheetIndex < 0 || m_activeSheetIndex >= static_cast<int>(m_sheets.size())) {
+        return;
+    }
+
+    auto& sheet = m_sheets[m_activeSheetIndex];
+    RECT rect;
+    GetClientRect(m_hCanvas, &rect);
+
+    double pad = 15.0;
+    double canvasW = rect.right - 2 * pad;
+    double canvasH = rect.bottom - 2 * pad;
+
+    double scaleX = canvasW / sheet.width;
+    double scaleY = canvasH / sheet.height;
+    double scale = ((scaleX < scaleY) ? scaleX : scaleY) * m_zoomFactor;
+
+    double offX = pad + (canvasW - sheet.width * scale) / 2.0 + m_panOffsetX;
+    double offY = pad + (canvasH - sheet.height * scale) / 2.0 + m_panOffsetY;
+
+    int hitIdx = -1;
+    for (size_t i = 0; i < sheet.placedComponents.size(); ++i) {
+        const auto& comp = sheet.placedComponents[i];
+        double compGx = offX + comp.posX * scale;
+        double compGy = offY + comp.posY * scale;
+        double compGw = comp.getEffectiveWidth() * scale;
+        double compGh = comp.getEffectiveHeight() * scale;
+
+        if (mouseX >= compGx && mouseX <= compGx + compGw &&
+            mouseY >= compGy && mouseY <= compGy + compGh) {
+            hitIdx = static_cast<int>(i);
+            break;
+        }
+    }
+
+    HMENU hPopup = CreatePopupMenu();
+    if (hitIdx >= 0) {
+        AppendMenu(hPopup, MF_STRING, IDC_CTX_REMOVE_PART, "Usun detal z plyty");
+        AppendMenu(hPopup, MF_STRING, IDC_CTX_MOVE_SHEET, "Przenies na kolejna plyte");
+        AppendMenu(hPopup, MF_STRING, IDC_CTX_NEW_SHEET, "Utworz nowa plyte i przenies");
+    } else {
+        AppendMenu(hPopup, MF_STRING, IDC_BTN_RESET_ZOOM, "Resetuj widok (Zoom 1:1)");
+    }
+
+    int cmd = TrackPopupMenu(hPopup, TPM_RETURNCMD | TPM_RIGHTBUTTON, ptScreen.x, ptScreen.y, 0, m_hwnd, NULL);
+    DestroyMenu(hPopup);
+
+    if (cmd == IDC_CTX_REMOVE_PART && hitIdx >= 0) {
+        sheet.placedComponents.erase(sheet.placedComponents.begin() + hitIdx);
+        InvalidateRect(m_hCanvas, NULL, TRUE);
+    } else if (cmd == IDC_CTX_MOVE_SHEET && hitIdx >= 0) {
+        Component movedComp = sheet.placedComponents[hitIdx];
+        sheet.placedComponents.erase(sheet.placedComponents.begin() + hitIdx);
+
+        int targetSheetIdx = m_activeSheetIndex + 1;
+        if (targetSheetIdx >= static_cast<int>(m_sheets.size())) {
+            SheetLayout newSheet;
+            newSheet.width = m_nestingParams.sheetWidth;
+            newSheet.height = m_nestingParams.sheetHeight;
+            m_sheets.push_back(newSheet);
+            targetSheetIdx = static_cast<int>(m_sheets.size()) - 1;
+        }
+        movedComp.posX = m_nestingParams.margin;
+        movedComp.posY = m_nestingParams.margin;
+        m_sheets[targetSheetIdx].placedComponents.push_back(movedComp);
+        m_activeSheetIndex = targetSheetIdx;
+        InvalidateRect(m_hCanvas, NULL, TRUE);
+    } else if (cmd == IDC_CTX_NEW_SHEET && hitIdx >= 0) {
+        Component movedComp = sheet.placedComponents[hitIdx];
+        sheet.placedComponents.erase(sheet.placedComponents.begin() + hitIdx);
+
+        SheetLayout newSheet;
+        newSheet.width = m_nestingParams.sheetWidth;
+        newSheet.height = m_nestingParams.sheetHeight;
+        movedComp.posX = m_nestingParams.margin;
+        movedComp.posY = m_nestingParams.margin;
+        newSheet.placedComponents.push_back(movedComp);
+
+        m_sheets.push_back(newSheet);
+        m_activeSheetIndex = static_cast<int>(m_sheets.size()) - 1;
+        InvalidateRect(m_hCanvas, NULL, TRUE);
+    } else if (cmd == IDC_BTN_RESET_ZOOM) {
+        m_zoomFactor = 1.0;
+        m_panOffsetX = 0.0;
+        m_panOffsetY = 0.0;
+        InvalidateRect(m_hCanvas, NULL, TRUE);
+    }
+}
+
 void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
     RECT rect;
     GetClientRect(hwnd, &rect);
@@ -1185,10 +1336,10 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
 
         double scaleX = canvasW / sheet.width;
         double scaleY = canvasH / sheet.height;
-        double scale = (scaleX < scaleY) ? scaleX : scaleY;
+        double scale = ((scaleX < scaleY) ? scaleX : scaleY) * m_zoomFactor;
 
-        double offX = pad + (canvasW - sheet.width * scale) / 2.0;
-        double offY = pad + (canvasH - sheet.height * scale) / 2.0;
+        double offX = pad + (canvasW - sheet.width * scale) / 2.0 + m_panOffsetX;
+        double offY = pad + (canvasH - sheet.height * scale) / 2.0 + m_panOffsetY;
 
         // Draw outer board boundaries
         HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(120, 120, 120));
@@ -1234,13 +1385,27 @@ void MainWindow::OnPaintCanvas(HWND hwnd, HDC hdc) {
                 pts.push_back(gPt);
             }
 
-            // Assign block colors exactly as in the mock image (Blue, Red, Gray)
-            COLORREF blockColor = RGB(220, 220, 220); // standard gray
-            if (count % 7 == 0) {
-                blockColor = RGB(204, 30, 30); // deep red
-            } else if (count % 5 == 0) {
-                blockColor = RGB(20, 90, 210); // deep blue
+            // Distinct RGB color palette mapped deterministically by component name
+            static const COLORREF compPalette[] = {
+                RGB(204,  30,  30), // Deep Red
+                RGB( 20,  90, 210), // Royal Blue
+                RGB( 40, 160,  60), // Emerald Green
+                RGB(220, 140,  20), // Amber Gold
+                RGB(150,  50, 180), // Purple
+                RGB(200,  80, 140), // Magenta
+                RGB( 30, 160, 180), // Cyan
+                RGB(210, 100,  40), // Orange
+                RGB( 90, 120, 200), // Steel Blue
+                RGB(120, 170,  50), // Olive Green
+                RGB(180,  60, 200), // Violet
+                RGB(210, 180,  40)  // Golden Yellow
+            };
+
+            unsigned int nameHash = 0;
+            for (char ch : comp.name) {
+                nameHash = nameHash * 31 + static_cast<unsigned char>(ch);
             }
+            COLORREF blockColor = compPalette[nameHash % (sizeof(compPalette) / sizeof(compPalette[0]))];
 
             HBRUSH compBrush = CreateSolidBrush(blockColor);
             HPEN compPen = CreatePen(PS_SOLID, 1, RGB(50, 50, 50));
