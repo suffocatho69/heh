@@ -646,17 +646,30 @@ void MainWindow::InitControls(HWND hwnd) {
         f2.close();
     }
 
-    // Populate TreeView hierarchy
+    // Populate TreeView hierarchy with ImageList icons
+    HIMAGELIST hImageList = ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 3, 3);
+    if (hImageList) {
+        HICON hClosed = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_FOLDER_CLOSED));
+        HICON hOpen = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_FOLDER_OPEN));
+        HICON hEmpty = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_FOLDER_EMPTY));
+        if (hClosed) ImageList_AddIcon(hImageList, hClosed);
+        if (hOpen) ImageList_AddIcon(hImageList, hOpen);
+        if (hEmpty) ImageList_AddIcon(hImageList, hEmpty);
+        TreeView_SetImageList(m_hTreeViewDB, hImageList, TVSIL_NORMAL);
+    }
+
     auto PopulateTree = [&](const std::string& filterQuery) {
         TreeView_DeleteAllItems(m_hTreeViewDB);
 
-        auto AddTreeItem = [](HWND hTree, const std::string& text, HTREEITEM hParent = TVI_ROOT) -> HTREEITEM {
+        auto AddTreeItem = [](HWND hTree, const std::string& text, HTREEITEM hParent = TVI_ROOT, int imgIdx = 0, int selImgIdx = 1) -> HTREEITEM {
             TVINSERTSTRUCT tvis;
             ZeroMemory(&tvis, sizeof(tvis));
             tvis.hParent = hParent;
             tvis.hInsertAfter = TVI_LAST;
-            tvis.item.mask = TVIF_TEXT;
+            tvis.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
             tvis.item.pszText = (LPSTR)text.c_str();
+            tvis.item.iImage = imgIdx;
+            tvis.item.iSelectedImage = selImgIdx;
             return TreeView_InsertItem(hTree, &tvis);
         };
 
@@ -666,7 +679,7 @@ void MainWindow::InitControls(HWND hwnd) {
         const char* categories[] = { "Elementy", "Meble", "Fronty", "Wlasne" };
         for (int i = 0; i < 4; ++i) {
             std::string catName = categories[i];
-            HTREEITEM hCat = AddTreeItem(m_hTreeViewDB, "[Kat] " + catName, TVI_ROOT);
+            HTREEITEM hCat = AddTreeItem(m_hTreeViewDB, "[Kat] " + catName, TVI_ROOT, 0, 1);
 
             std::string searchPath = "BazaDXF/" + catName + "/*.dxf";
             WIN32_FIND_DATA ffd;
@@ -678,7 +691,7 @@ void MainWindow::InitControls(HWND hwnd) {
                     std::transform(lowerFileName.begin(), lowerFileName.end(), lowerFileName.begin(), ::tolower);
 
                     if (lowerFilter.empty() || lowerFileName.find(lowerFilter) != std::string::npos) {
-                        AddTreeItem(m_hTreeViewDB, fileName, hCat);
+                        AddTreeItem(m_hTreeViewDB, fileName, hCat, 2, 2);
                     }
                 } while (FindNextFile(hFind, &ffd) != 0);
                 FindClose(hFind);

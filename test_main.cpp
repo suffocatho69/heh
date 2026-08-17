@@ -10,6 +10,7 @@
 #include "src/ComponentManager.h"
 #include "src/NCGenerator.h"
 #include "src/PDFWriter.h"
+#include "src/Geometry.h"
 #include "src/NumUtil.h"
 #include "src/Project.h"
 
@@ -502,6 +503,22 @@ void runNestingEngineAndNCGenTests() {
     std::cout << "[TEST] Nesting and NC Generator tests passed successfully!\n";
 }
 
+void runGeometryTests() {
+    std::cout << "[TEST] Running Geometry NFP and offset tests...\n";
+
+    std::vector<Point> rect = { Point(0,0), Point(100,0), Point(100,50), Point(0,50) };
+    auto offsetRect = Geometry::offsetPolygon(rect, 10.0);
+    assert(!offsetRect.empty());
+
+    std::vector<Point> polyA = { Point(0,0), Point(100,0), Point(100,100), Point(0,100) };
+    std::vector<Point> polyB = { Point(0,0), Point(50,0), Point(50,50), Point(0,50) };
+
+    auto nfp = Geometry::computeNFP(polyA, polyB);
+    assert(!nfp.empty());
+
+    std::cout << "[TEST] Geometry tests passed successfully!\n";
+}
+
 void runPolishPDFTest() {
     std::cout << "[TEST] Running Polish PDF report generation test...\n";
 
@@ -544,6 +561,7 @@ int main() {
     std::cout << "  RETRO 2D NESTING SYSTEM - UNIT TEST SUITE (C++14)\n";
     std::cout << "=========================================================\n";
 
+    runGeometryTests();
     runPolishPDFTest();
     runComponentTests();
     runDXFReaderTests();

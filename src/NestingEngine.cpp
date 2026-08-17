@@ -1,9 +1,13 @@
 #include "NestingEngine.h"
+#include "Geometry.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <random>
 #include <future>
+
+// Toggle flag to select exact Minkowski No-Fit-Polygon (NFP) geometry candidate engine
+static const bool USE_NFP_ENGINE = true;
 
 bool NestingEngine::intersect(
     double x1, double y1, double w1, double h1,
@@ -442,6 +446,17 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                             for (const auto& p : inner) {
                                 Point rp = Component::transformPoint(p, angle, Point(0,0));
                                 g_placed.push_back(Point(placed.posX + (rp.x - minX), placed.posY + (rp.y - minY)));
+                            }
+                        }
+
+                        if (USE_NFP_ENGINE) {
+                            // Compute exact Minkowski NFP contact boundary points
+                            auto nfpBoundary = Geometry::computeNFP(g_placed, item_poly);
+                            for (const auto& np : nfpBoundary) {
+                                candidates.push_back(Point(np.x - minLocalX, np.y - minLocalY));
+                                candidates.push_back(Point(np.x - minLocalX + params.spacing, np.y - minLocalY));
+                                candidates.push_back(Point(np.x - minLocalX, np.y - minLocalY + params.spacing));
+                                candidates.push_back(Point(np.x - minLocalX + params.spacing, np.y - minLocalY + params.spacing));
                             }
                         }
 
