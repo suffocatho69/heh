@@ -766,9 +766,11 @@ void MainWindow::InitControls(HWND hwnd) {
 
     // Component Control Buttons
     m_hBtnAddComp = CreateWindowEx(0, "BUTTON", "Dodaj",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_ICON,
         20, 645, 100, 30, hwnd, (HMENU)IDC_BTN_ADD_COMP, m_hInstance, NULL);
     SendMessage(m_hBtnAddComp, WM_SETFONT, (WPARAM)hFont, TRUE);
+    HICON hIconAdd = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_TOOL_ADD));
+    if (hIconAdd) SendMessage(m_hBtnAddComp, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hIconAdd);
 
     m_hBtnRemoveComp = CreateWindowEx(0, "BUTTON", "Usun",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -884,6 +886,12 @@ void MainWindow::InitControls(HWND hwnd) {
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         730, 483, 80, 20, hwnd, NULL, m_hInstance, NULL);
     SendMessage(hLabelNC, WM_SETFONT, (WPARAM)hFontBold, TRUE);
+
+    HWND hIconNcStatic = CreateWindowEx(0, "STATIC", "",
+        WS_CHILD | WS_VISIBLE | SS_ICON,
+        710, 483, 16, 16, hwnd, NULL, m_hInstance, NULL);
+    HICON hIconWrench = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_TOOL_WRENCH));
+    if (hIconWrench) SendMessage(hIconNcStatic, STM_SETICON, (WPARAM)hIconWrench, 0);
 
     HWND hLabelNarzedzie = CreateWindowEx(0, "STATIC", "Narzedzie:",
         WS_CHILD | WS_VISIBLE | SS_LEFT,

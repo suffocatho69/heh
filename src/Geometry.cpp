@@ -67,49 +67,84 @@ std::vector<Point> offsetPolygon(const std::vector<Point>& poly, double distance
     return offsetPoly;
 }
 
-std::vector<Point> computeNFP(const std::vector<Point>& polyA_stationary, const std::vector<Point>& polyB_moving) {
-    std::vector<Point> nfpPoints;
-    if (polyA_stationary.empty() || polyB_moving.empty()) return nfpPoints;
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
-    // 1. Sliding vertices of B along edges of A
+struct EdgeVector {
+    double dx;
+    double dy;
+    double angle;
+};
+
+std::vector<Point> computeNFP(const std::vector<Point>& polyA_stationary, const std::vector<Point>& polyB_moving) {
+    if (polyA_stationary.size() < 3 || polyB_moving.size() < 3) {
+        return polyA_stationary;
+    }
+
+    // 1. Find vertex A with min Y (and min X if tied)
+    Point minA = polyA_stationary[0];
+    for (const auto& p : polyA_stationary) {
+        if (p.y < minA.y || (std::abs(p.y - minA.y) < 1e-6 && p.x < minA.x)) {
+            minA = p;
+        }
+    }
+
+    // 2. Find vertex B with min Y (and min X if tied)
+    Point minB = polyB_moving[0];
+    for (const auto& p : polyB_moving) {
+        if (p.y < minB.y || (std::abs(p.y - minB.y) < 1e-6 && p.x < minB.x)) {
+            minB = p;
+        }
+    }
+
+    // 3. Collect edge vectors of A
+    std::vector<EdgeVector> edges;
     size_t nA = polyA_stationary.size();
     for (size_t i = 0; i < nA; ++i) {
-        Point a1 = polyA_stationary[i];
-        Point a2 = polyA_stationary[(i + 1) % nA];
-
-        double dx = a2.x - a1.x;
-        double dy = a2.y - a1.y;
-
-        for (const auto& bj : polyB_moving) {
-            double samples[3] = { 0.0, 0.5, 1.0 };
-            for (double t : samples) {
-                double edgeX = a1.x + t * dx;
-                double edgeY = a1.y + t * dy;
-                nfpPoints.push_back(Point(edgeX - bj.x, edgeY - bj.y));
-            }
+        Point p1 = polyA_stationary[i];
+        Point p2 = polyA_stationary[(i + 1) % nA];
+        double dx = p2.x - p1.x;
+        double dy = p2.y - p1.y;
+        if (std::hypot(dx, dy) > 1e-6) {
+            double ang = std::atan2(dy, dx);
+            if (ang < 0) ang += 2.0 * M_PI;
+            edges.push_back({ dx, dy, ang });
         }
     }
 
-    // 2. Sliding edges of B along vertices of A
+    // 4. Collect negated edge vectors of B (-B)
     size_t nB = polyB_moving.size();
-    for (const auto& ai : polyA_stationary) {
-        for (size_t j = 0; j < nB; ++j) {
-            Point b1 = polyB_moving[j];
-            Point b2 = polyB_moving[(j + 1) % nB];
-
-            double dx = b2.x - b1.x;
-            double dy = b2.y - b1.y;
-
-            double samples[3] = { 0.0, 0.5, 1.0 };
-            for (double t : samples) {
-                double edgeX = b1.x + t * dx;
-                double edgeY = b1.y + t * dy;
-                nfpPoints.push_back(Point(ai.x - edgeX, ai.y - edgeY));
-            }
+    for (size_t j = 0; j < nB; ++j) {
+        Point p1 = polyB_moving[j];
+        Point p2 = polyB_moving[(j + 1) % nB];
+        // Edge of -B: (p1 - p2)
+        double dx = p1.x - p2.x;
+        double dy = p1.y - p2.y;
+        if (std::hypot(dx, dy) > 1e-6) {
+            double ang = std::atan2(dy, dx);
+            if (ang < 0) ang += 2.0 * M_PI;
+            edges.push_back({ dx, dy, ang });
         }
     }
 
-    return nfpPoints;
+    // 5. Sort all edge vectors by polar angle
+    std::sort(edges.begin(), edges.end(), [](const EdgeVector& e1, const EdgeVector& e2) {
+        return e1.angle < e2.angle;
+    });
+
+    // 6. Generate connected closed NFP contour starting at startPt = minA - minB
+    std::vector<Point> nfpContour;
+    Point curr(minA.x - minB.x, minA.y - minB.y);
+    nfpContour.push_back(curr);
+
+    for (const auto& e : edges) {
+        curr.x += e.dx;
+        curr.y += e.dy;
+        nfpContour.push_back(curr);
+    }
+
+    return nfpContour;
 }
 
 } // namespace Geometry

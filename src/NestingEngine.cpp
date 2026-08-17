@@ -450,57 +450,32 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                         }
 
                         if (USE_NFP_ENGINE) {
-                            // Compute exact Minkowski NFP contact boundary points
-                            auto nfpBoundary = Geometry::computeNFP(g_placed, item_poly);
-                            for (const auto& np : nfpBoundary) {
-                                candidates.push_back(Point(np.x - minLocalX, np.y - minLocalY));
-                                candidates.push_back(Point(np.x - minLocalX + params.spacing, np.y - minLocalY));
-                                candidates.push_back(Point(np.x - minLocalX, np.y - minLocalY + params.spacing));
-                                candidates.push_back(Point(np.x - minLocalX + params.spacing, np.y - minLocalY + params.spacing));
-                            }
-                        }
+                            // 1. Offset placed component polygon outwards by technology spacing
+                            auto offset_A = Geometry::offsetPolygon(g_placed, params.spacing);
 
-                        // Mathematically slide vertices of B along edges of A to form complete sliding NFP candidates
-                        if (g_placed.size() >= 2 && item_poly.size() >= 2) {
-                            // 1. Slide each vertex B_j along each edge of A
-                            for (size_t i = 0; i < g_placed.size() - 1; ++i) {
-                                Point a1 = g_placed[i];
-                                Point a2 = g_placed[i+1];
+                            // 2. Compute exact No-Fit-Polygon boundary contour
+                            auto nfpContour = Geometry::computeNFP(offset_A, item_poly);
 
-                                // Edge normal (pointing outwards)
-                                double dx = a2.x - a1.x;
-                                double dy = a2.y - a1.y;
-                                double len = std::sqrt(dx*dx + dy*dy);
-                                double nx = 0.0, ny = 0.0;
-                                if (len > 1e-9) {
-                                    nx = -dy / len;
-                                    ny = dx / len;
-                                }
-
-                                for (const auto& bj : item_poly) {
-                                    // Evaluate contacts at start, middle, and end of edge
-                                    double t_samples[3] = {0.0, 0.5, 1.0};
-                                    for (double t : t_samples) {
-                                        double edgeX = a1.x + t * dx;
-                                        double edgeY = a1.y + t * dy;
-
-                                        // Candidate position is edge touch point minus local candidate vertex
-                                        // offset outwards by safety technology spacing
-                                        double cx = edgeX - bj.x + nx * params.spacing;
-                                        double cy = edgeY - bj.y + ny * params.spacing;
-                                        candidates.push_back(Point(cx, cy));
-                                    }
+                            // 3. Candidates are exact ordered NFP contour boundary vertices and edge samples
+                            for (size_t k = 0; k < nfpContour.size(); ++k) {
+                                Point np1 = nfpContour[k];
+                                Point np2 = nfpContour[(k + 1) % nfpContour.size()];
+                                for (double t = 0.0; t <= 1.0; t += 0.2) {
+                                    double cx = np1.x + t * (np2.x - np1.x);
+                                    double cy = np1.y + t * (np2.y - np1.y);
+                                    candidates.push_back(Point(cx - minLocalX, cy - minLocalY));
                                 }
                             }
+                        } else {
+                            // Legacy sampling method (used exclusively when USE_NFP_ENGINE == false)
+                            if (g_placed.size() >= 2 && item_poly.size() >= 2) {
+                                // 1. Slide each vertex B_j along each edge of A
+                                for (size_t i = 0; i < g_placed.size() - 1; ++i) {
+                                    Point a1 = g_placed[i];
+                                    Point a2 = g_placed[i+1];
 
-                            // 2. Slide each edge of B along each vertex of A
-                            for (const auto& ai : g_placed) {
-                                for (size_t j = 0; j < item_poly.size() - 1; ++j) {
-                                    Point b1 = item_poly[j];
-                                    Point b2 = item_poly[j+1];
-
-                                    double dx = b2.x - b1.x;
-                                    double dy = b2.y - b1.y;
+                                    double dx = a2.x - a1.x;
+                                    double dy = a2.y - a1.y;
                                     double len = std::sqrt(dx*dx + dy*dy);
                                     double nx = 0.0, ny = 0.0;
                                     if (len > 1e-9) {
@@ -508,14 +483,43 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                                         ny = dx / len;
                                     }
 
-                                    double t_samples[3] = {0.0, 0.5, 1.0};
-                                    for (double t : t_samples) {
-                                        double edgeLocalX = b1.x + t * dx;
-                                        double edgeLocalY = b1.y + t * dy;
+                                    for (const auto& bj : item_poly) {
+                                        double t_samples[3] = {0.0, 0.5, 1.0};
+                                        for (double t : t_samples) {
+                                            double edgeX = a1.x + t * dx;
+                                            double edgeY = a1.y + t * dy;
 
-                                        double cx = ai.x - edgeLocalX + nx * params.spacing;
-                                        double cy = ai.y - edgeLocalY + ny * params.spacing;
-                                        candidates.push_back(Point(cx, cy));
+                                            double cx = edgeX - bj.x + nx * params.spacing;
+                                            double cy = edgeY - bj.y + ny * params.spacing;
+                                            candidates.push_back(Point(cx, cy));
+                                        }
+                                    }
+                                }
+
+                                // 2. Slide each edge of B along each vertex of A
+                                for (const auto& ai : g_placed) {
+                                    for (size_t j = 0; j < item_poly.size() - 1; ++j) {
+                                        Point b1 = item_poly[j];
+                                        Point b2 = item_poly[j+1];
+
+                                        double dx = b2.x - b1.x;
+                                        double dy = b2.y - b1.y;
+                                        double len = std::sqrt(dx*dx + dy*dy);
+                                        double nx = 0.0, ny = 0.0;
+                                        if (len > 1e-9) {
+                                            nx = -dy / len;
+                                            ny = dx / len;
+                                        }
+
+                                        double t_samples[3] = {0.0, 0.5, 1.0};
+                                        for (double t : t_samples) {
+                                            double edgeLocalX = b1.x + t * dx;
+                                            double edgeLocalY = b1.y + t * dy;
+
+                                            double cx = ai.x - edgeLocalX + nx * params.spacing;
+                                            double cy = ai.y - edgeLocalY + ny * params.spacing;
+                                            candidates.push_back(Point(cx, cy));
+                                        }
                                     }
                                 }
                             }
