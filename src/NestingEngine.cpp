@@ -449,14 +449,14 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                             }
                         }
 
-                        if (USE_NFP_ENGINE) {
-                            // 1. Offset placed component polygon outwards by technology spacing
-                            auto offset_A = Geometry::offsetPolygon(g_placed, params.spacing);
+                        auto offset_A = Geometry::offsetPolygon(g_placed, params.spacing);
+                        bool isPairConvex = Geometry::isConvex(offset_A) && Geometry::isConvex(item_poly);
 
-                            // 2. Compute exact No-Fit-Polygon boundary contour
+                        if (USE_NFP_ENGINE && isPairConvex) {
+                            // Compute exact No-Fit-Polygon boundary contour for convex polygon pair
                             auto nfpContour = Geometry::computeNFP(offset_A, item_poly);
 
-                            // 3. Candidates are exact ordered NFP contour boundary vertices and edge samples
+                            // Candidates are exact ordered NFP contour boundary vertices and edge samples
                             for (size_t k = 0; k < nfpContour.size(); ++k) {
                                 Point np1 = nfpContour[k];
                                 Point np2 = nfpContour[(k + 1) % nfpContour.size()];
@@ -467,7 +467,7 @@ std::vector<SheetLayout> NestingEngine::performNesting(
                                 }
                             }
                         } else {
-                            // Legacy sampling method (used exclusively when USE_NFP_ENGINE == false)
+                            // Edge/vertex sliding contact sampling method for non-convex (concave) shape pairs
                             if (g_placed.size() >= 2 && item_poly.size() >= 2) {
                                 // 1. Slide each vertex B_j along each edge of A
                                 for (size_t i = 0; i < g_placed.size() - 1; ++i) {
