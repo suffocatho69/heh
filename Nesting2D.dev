@@ -1,0 +1,234 @@
+[Project]
+FileName=Nesting2D.dev
+Name=Nesting2D
+Type=0
+Ver=2
+ObjFiles=
+Defs=
+Compiler=-std=c++14 -pthread_@@_
+CppCompiler=-std=c++14 -pthread_@@_
+Linker=-mwindows_@@_-lcomctl32_@@_-lgdi32_@@_-lpthread_@@_-lstdc++_@@_
+IsCtxApp=1
+CompilerType=0
+UnitCount=20
+
+[ClassInformation]
+PageCount=0
+
+[Unit1]
+FileName=src\Component.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit19]
+FileName=src\ZIPWriter.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit20]
+FileName=src\ZIPWriter.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit17]
+FileName=src\PDFWriter.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit18]
+FileName=src\PDFWriter.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit2]
+FileName=src\Component.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit3]
+FileName=src\DXFReader.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit4]
+FileName=src\DXFReader.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit5]
+FileName=src\NestingEngine.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit6]
+FileName=src\NestingEngine.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit7]
+FileName=src\ComponentManager.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit8]
+FileName=src\ComponentManager.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit9]
+FileName=src\NCGenerator.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit10]
+FileName=src\NCGenerator.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit11]
+FileName=src\MainWindow.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit12]
+FileName=src\MainWindow.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit13]
+FileName=src\main.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit14]
+FileName=src\resource.rc
+Folder=Resources
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[VersionInfo]
+Major=1
+Minor=0
+Release=0
+Build=0
+LanguageID=1045
+CharsetID=1250
+CompanyName=Orientica.pl
+FileVersion=1.0.0.0
+FileDescription=Program do Nestingu 2D z plikow DXF
+InternalName=Nesting2D
+LegalCopyright=Orientica.pl
+LegalTrademarks=
+OriginalFilename=Nesting2D.exe
+ProductName=Retro Nesting 2D
+ProductVersion=1.0.0.0
+AutoIncBuildNr=0
+SyncProduct=1
+
+[Unit15]
+FileName=src\DXFWriter.h
+CompileCpp=1
+Folder=Header Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit16]
+FileName=src\DXFWriter.cpp
+CompileCpp=1
+Folder=Source Files
+Compile=1
+Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=

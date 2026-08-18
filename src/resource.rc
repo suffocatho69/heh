@@ -1,0 +1,10 @@
+#include "resource.h"
+
+// Standard win32 resource script
+IDI_APP_ICON ICON DISCARDABLE "app.ico"
+IDI_FOLDER_CLOSED ICON DISCARDABLE "folder_closed.ico"
+IDI_FOLDER_OPEN ICON DISCARDABLE "folder_open.ico"
+IDI_FOLDER_EMPTY ICON DISCARDABLE "folder_empty.ico"
+IDI_TOOL_ADD ICON DISCARDABLE "tool_add.ico"
+IDI_TOOL_SETTINGS ICON DISCARDABLE "tool_settings.ico"
+IDI_TOOL_WRENCH ICON DISCARDABLE "tool_wrench.ico"
