@@ -4,6 +4,24 @@
 
 namespace Geometry {
 
+bool isConvex(const std::vector<Point>& poly) {
+    if (poly.size() < 3) return false;
+    bool hasPos = false;
+    bool hasNeg = false;
+    size_t n = poly.size();
+    for (size_t i = 0; i < n; ++i) {
+        Point p1 = poly[i];
+        Point p2 = poly[(i + 1) % n];
+        Point p3 = poly[(i + 2) % n];
+
+        double cross = (p2.x - p1.x) * (p3.y - p2.y) - (p2.y - p1.y) * (p3.x - p2.x);
+        if (cross > 1e-7) hasPos = true;
+        if (cross < -1e-7) hasNeg = true;
+        if (hasPos && hasNeg) return false;
+    }
+    return true;
+}
+
 std::vector<Point> offsetPolygon(const std::vector<Point>& poly, double distance) {
     if (poly.size() < 3 || std::abs(distance) < 1e-6) {
         return poly;

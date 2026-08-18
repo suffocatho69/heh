@@ -658,11 +658,12 @@ void MainWindow::InitControls(HWND hwnd) {
         0, 0, 1100, 50, hwnd, (HMENU)IDC_TOOLBAR, m_hInstance, NULL);
 
     // Create Retro toolbar pushbuttons
-    auto CreateToolbarBtn = [&](const std::string& txt, int id, int x, int w) {
+    auto CreateToolbarBtn = [&](const std::string& txt, int id, int x, int w) -> HWND {
         HWND hBtn = CreateWindowEx(0, "BUTTON", txt.c_str(),
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
             x, 8, w, 34, hwnd, (HMENU)(INT_PTR)id, m_hInstance, NULL);
         SendMessage(hBtn, WM_SETFONT, (WPARAM)hFontBold, TRUE);
+        return hBtn;
     };
 
     CreateToolbarBtn("Nowy", IDC_TB_BTN_NEW, 10, 50);
@@ -670,7 +671,12 @@ void MainWindow::InitControls(HWND hwnd) {
     CreateToolbarBtn("Drukuj", IDC_TB_BTN_PRINT, 125, 55);
     CreateToolbarBtn("DXF", IDC_TB_BTN_DXF, 185, 45);
     CreateToolbarBtn("Plyty", IDC_TB_BTN_SHEETS, 235, 50);
-    CreateToolbarBtn("Ustawienia", IDC_TB_BTN_SETTINGS, 290, 80);
+    HWND hBtnSet = CreateToolbarBtn("Ustawienia", IDC_TB_BTN_SETTINGS, 290, 80);
+    HICON hIconSet = LoadIcon(m_hInstance, MAKEINTRESOURCE(IDI_TOOL_SETTINGS));
+    if (hIconSet && hBtnSet) {
+        SetWindowLongPtr(hBtnSet, GWL_STYLE, GetWindowLongPtr(hBtnSet, GWL_STYLE) | BS_ICON);
+        SendMessage(hBtnSet, BM_SETIMAGE, IMAGE_ICON, (LPARAM)hIconSet);
+    }
     CreateToolbarBtn("Usun", IDC_TB_BTN_DELETE, 375, 50);
     CreateToolbarBtn("Nesting", IDC_TB_BTN_NESTING, 430, 65);
     CreateToolbarBtn("NC", IDC_TB_BTN_NC, 500, 35);
@@ -873,6 +879,11 @@ void MainWindow::InitControls(HWND hwnd) {
         WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
         470, 450, 600, 245, hwnd, NULL, m_hInstance, NULL);
     SendMessage(m_hGrpParametry, WM_SETFONT, (WPARAM)hFontBold, TRUE);
+
+    HWND hIconSetStatic = CreateWindowEx(0, "STATIC", "",
+        WS_CHILD | WS_VISIBLE | SS_ICON,
+        450, 450, 16, 16, hwnd, NULL, m_hInstance, NULL);
+    if (hIconSet) SendMessage(hIconSetStatic, STM_SETICON, (WPARAM)hIconSet, 0);
 
     // Left Columns inside Parametry
     HWND hLabelPlyta = CreateWindowEx(0, "STATIC", "Plyta:",
